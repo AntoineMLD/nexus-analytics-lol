@@ -98,7 +98,8 @@ ipython_config.py
 #   Similar to Pipfile.lock, it is generally recommended to include uv.lock in version control.
 #   This is especially recommended for binary packages to ensure reproducibility, and is more
 #   commonly ignored for libraries.
-# uv.lock
+uv.lock
+.python-version
 
 # poetry
 #   Similar to Pipfile.lock, it is generally recommended to include poetry.lock in version control.
@@ -166,7 +167,7 @@ venv.bak/
 
 # mkdocs documentation
 /site
-
+/docs/docs_projet
 # mypy
 .mypy_cache/
 .dmypy.json
@@ -216,3 +217,28 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+
+# dbt
+dbt/target/
+dbt/dbt_packages/
+dbt/logs/
+
+# GCP
+*.json
+gcp-key*.json
+service-account*.json
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Tests
+.pytest_cache/
+.coverage
+htmlcov/
+EOF
