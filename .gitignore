@@ -241,4 +241,5 @@ Thumbs.db
 .pytest_cache/
 .coverage
 htmlcov/
-EOF
+EOFgoogle-cloud-sdk/
+*.tar.gz
