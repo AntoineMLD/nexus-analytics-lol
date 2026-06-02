@@ -11,40 +11,17 @@ import argparse
 import csv
 import hashlib
 import io
-import logging
 from contextlib import contextmanager
 from datetime import UTC, datetime
 
-import httpx
 from google.cloud import storage
 from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
 from googleapiclient.http import MediaIoBaseDownload
-from pydantic_settings import BaseSettings, SettingsConfigDict
 
+from ingestion.utils import logger, send_discord_notification, settings
 
-class Settings(BaseSettings):
-    """Application settings loaded from environment variables or .env file.
-
-    Pydantic raises a ValidationError at startup if any required field is missing.
-    """
-
-    model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
-
-    api_key: str
-    gcs_bucket_name: str
-    discord_webhook_url: str = ""
-
-
-settings = Settings()
-
-DRIVE_FOLDER_ID = "1gLSw0RLjBbtaNy0dgnGQDAZOHIgCe-HH"
-
-MIN_ROW_COUNT = 1000
-EXPECTED_COLUMNS = {"gameid", "league", "year", "split", "date", "game", "patch", "participantid"}
-
-logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
-logger = logging.getLogger(__name__)
+from .config import DRIVE_FOLDER_ID, EXPECTED_COLUMNS, MIN_ROW_COUNT
 
 
 def get_current_year() -> int:
@@ -60,20 +37,6 @@ def build_file_name(year: int) -> str:
 def build_gcs_destination(year: int, file_name: str) -> str:
     """Return the GCS Bronze destination path for a given year."""
     return f"bronze/oracle_elixir/{year}/{file_name}"
-
-
-def send_discord_notification(message: str) -> None:
-    """Send a notification message to Discord via webhook.
-
-    Silently skips if DISCORD_WEBHOOK_URL is not set.
-    """
-    if not settings.discord_webhook_url:
-        logger.warning("DISCORD_WEBHOOK_URL not set, skipping notification.")
-        return
-    try:
-        httpx.post(settings.discord_webhook_url, json={"content": message}, timeout=10)
-    except httpx.RequestError as exc:
-        logger.warning("Failed to send Discord notification: %s", exc)
 
 
 def find_file_in_drive(service, folder_id: str, file_name: str) -> dict | None:
