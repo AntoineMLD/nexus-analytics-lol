@@ -1,6 +1,8 @@
 import logging
+from contextlib import contextmanager
 
 import httpx
+from google.cloud import storage
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -15,6 +17,8 @@ class Settings(BaseSettings):
     gcs_bucket_name: str
     api_key: str
     discord_webhook_url: str = ""
+    spideybot_fandom_name: str = ""
+    spideybot_fandom_password: str = ""
 
 
 settings = Settings()
@@ -36,3 +40,19 @@ def send_discord_notification(message: str) -> None:
         httpx.post(settings.discord_webhook_url, json={"content": message}, timeout=10)
     except httpx.RequestError as exc:
         logger.warning("Failed to send Discord notification: %s", exc)
+
+
+@contextmanager
+def gcs_client():
+    """Context manager that opens and closes a Google Cloud Storage client."""
+    client = storage.Client()
+    try:
+        yield client
+    finally:
+        client.close()
+
+
+def verify_gcs_object_exists(bucket_name: str, destination: str) -> bool:
+    """Return True if the object exists in GCS after upload."""
+    with gcs_client() as client:
+        return client.bucket(bucket_name).blob(destination).exists()

@@ -11,15 +11,19 @@ import argparse
 import csv
 import hashlib
 import io
-from contextlib import contextmanager
 from datetime import UTC, datetime
 
-from google.cloud import storage
 from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
 from googleapiclient.http import MediaIoBaseDownload
 
-from ingestion.utils import logger, send_discord_notification, settings
+from ingestion.utils import (
+    gcs_client,
+    logger,
+    send_discord_notification,
+    settings,
+    verify_gcs_object_exists,
+)
 
 from .config import DRIVE_FOLDER_ID, EXPECTED_COLUMNS, MIN_ROW_COUNT
 
@@ -106,16 +110,6 @@ def compute_metadata(content: bytes, year: int, row_count: int) -> dict:
     }
 
 
-@contextmanager
-def gcs_client():
-    """Context manager that opens and closes a Google Cloud Storage client."""
-    client = storage.Client()
-    try:
-        yield client
-    finally:
-        client.close()
-
-
 def upload_to_gcs_bronze(
     bucket_name: str, destination: str, content: bytes, metadata: dict
 ) -> None:
@@ -126,12 +120,6 @@ def upload_to_gcs_bronze(
         blob.metadata = metadata
         blob.upload_from_string(content, content_type="text/csv")
     logger.info("Uploaded to gs://%s/%s", bucket_name, destination)
-
-
-def verify_gcs_object_exists(bucket_name: str, destination: str) -> bool:
-    """Return True if the object exists in GCS after upload."""
-    with gcs_client() as client:
-        return client.bucket(bucket_name).blob(destination).exists()
 
 
 def run_ingestion(year: int | None = None) -> None:
