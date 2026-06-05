@@ -54,7 +54,7 @@ TABLE_CONFIGS: dict[str, dict] = {
     },
     "Teams": {
         "fields": (
-            "Name,OverviewPage,Short,Location,TeamLocation,Region," "Image,IsDisbanded,RenamedTo"
+            "Name,OverviewPage,Short,Location,TeamLocation,Region,Image,IsDisbanded,RenamedTo"
         ),
         "limit": 500,
     },
@@ -66,7 +66,7 @@ TABLE_CONFIGS: dict[str, dict] = {
         "limit": 500,
     },
     "TournamentRosters": {
-        "fields": ("Tournament,OverviewPage,Team,Short,Region," "RosterLinks,Roles,IsComplete"),
+        "fields": ("Tournament,OverviewPage,Team,Short,Region,RosterLinks,Roles,IsComplete"),
         "limit": 500,
     },
     "Teamnames": {
