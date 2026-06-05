@@ -12,6 +12,7 @@ Usage:
 import argparse
 import hashlib
 import json
+import sys
 import time
 from datetime import UTC, datetime
 
@@ -44,6 +45,7 @@ def fetch_cargo_page(
     limit: int,
     offset: int,
     where: str = "",
+    join_on: str = "",
 ) -> list[dict]:
     """Fetch a single page of results from the Leaguepedia Cargo API.
 
@@ -62,10 +64,14 @@ def fetch_cargo_page(
                 limit=limit,
                 offset=offset,
                 where=where,
+                join_on=join_on,
             )
         except Exception as exc:
-            is_ratelimited = "ratelimited" in str(exc).lower()
-            if is_ratelimited and attempt < max_retries:
+            exc_str = str(exc).lower()
+            is_retriable = (
+                "ratelimited" in exc_str or "timeout" in exc_str or "connection" in exc_str
+            )
+            if is_retriable and attempt < max_retries:
                 wait = min(base_delay * (multiplier**attempt), max_delay)
                 logger.warning(
                     "Rate limited — retrying in %ds (attempt %d/%d)...",
@@ -84,7 +90,12 @@ def fetch_cargo_page(
 
 
 def fetch_all_rows(
-    site: EsportsClient, tables: str, fields: str, limit: int, where: str = ""
+    site: EsportsClient,
+    tables: str,
+    fields: str,
+    limit: int,
+    where: str = "",
+    join_on: str = "",
 ) -> list[dict]:
     """Fetch all rows from a Cargo table by paginating until the last page.
 
@@ -95,7 +106,7 @@ def fetch_all_rows(
     page = 0
 
     while True:
-        rows = fetch_cargo_page(site, tables, fields, limit, offset, where)
+        rows = fetch_cargo_page(site, tables, fields, limit, offset, where, join_on)
         if not rows:
             break
         all_rows.extend(rows)
@@ -156,11 +167,13 @@ def save_to_gcs(rows: list[dict], bucket_name: str, file_name: str) -> None:
     send_discord_notification(msg)
 
 
-def run_ingestion(table_names: list[str] | None = None) -> None:
+def run_ingestion(table_names: list[str] | None = None) -> bool:
     """Run ingestion for the given tables, or all configured tables if none specified.
 
     Creates a single authenticated EsportsClient shared across all tables.
     GCS destination: bronze/leaguepedia/{TableName}/{YYYY-MM-DD}.json
+
+    Returns True if all tables fetched at least one row, False if any table failed.
 
     Args:
         table_names: List of table names to ingest. Defaults to all tables in TABLE_CONFIGS.
@@ -168,6 +181,7 @@ def run_ingestion(table_names: list[str] | None = None) -> None:
     site = build_esports_client()
     targets = table_names or list(TABLE_CONFIGS.keys())
     date_today = datetime.now(UTC).strftime("%Y-%m-%d")
+    all_success = True
 
     for table_name in targets:
         config = TABLE_CONFIGS[table_name]
@@ -175,13 +189,27 @@ def run_ingestion(table_names: list[str] | None = None) -> None:
 
         rows = fetch_all_rows(
             site=site,
-            tables=table_name,
+            tables=config.get("tables", table_name),
             fields=config["fields"],
             limit=config["limit"],
+            where=config.get("where", ""),
+            join_on=config.get("join_on", ""),
         )
+
+        min_rows = config.get("min_rows", 1)
+        if len(rows) < min_rows:
+            logger.error(
+                "Table %s incomplete: got %d rows, expected at least %d.",
+                table_name,
+                len(rows),
+                min_rows,
+            )
+            all_success = False
 
         file_name = f"{table_name}/{date_today}.json"
         save_to_gcs(rows, settings.gcs_bucket_name, file_name)
+
+    return all_success
 
 
 def parse_args() -> argparse.Namespace:
@@ -198,4 +226,5 @@ def parse_args() -> argparse.Namespace:
 
 if __name__ == "__main__":
     args = parse_args()
-    run_ingestion(table_names=[args.table] if args.table else None)
+    success = run_ingestion(table_names=[args.table] if args.table else None)
+    sys.exit(0 if success else 1)
