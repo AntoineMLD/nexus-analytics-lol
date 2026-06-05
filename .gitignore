@@ -228,7 +228,7 @@ dbt/logs/
 *.json
 gcp-key*.json
 service-account*.json
-
+google-cloud-sdk/
 # IDE
 .vscode/
 .idea/
