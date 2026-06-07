@@ -78,7 +78,7 @@ TABLE_CONFIGS: dict[str, dict] = {
             "ID,OverviewPage,Player,Name,NativeName,Country,"
             "Nationality__full,NationalityPrimary,Age,Birthdate,"
             "Team,Team2,CurrentTeams__full,Residency,Role,"
-            "TeamLast,IsRetired,IsSubstitute"
+            "TeamLast,IsRetired,IsSubstitute,SoloqueueIds"
         ),
         "limit": 500,
     },
