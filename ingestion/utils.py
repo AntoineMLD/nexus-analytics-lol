@@ -16,6 +16,7 @@ class Settings(BaseSettings):
 
     gcs_bucket_name: str
     api_key: str
+    riot_api: str = ""
     discord_webhook_url: str = ""
     spideybot_fandom_name: str = ""
     spideybot_fandom_password: str = ""
