@@ -19,13 +19,27 @@ Pipeline de données pour analyser la **LFL (La Ligue Française, D1 + D2)** dep
 ## Architecture GCS
 
 ```
+bronze/oracle_elixir/{year}/{filename}.csv         ← CSV brut Oracle's Elixir
 bronze/leaguepedia/{TableName}/{YYYY-MM-DD}.json   ← NDJSON brut Leaguepedia
+bronze/riot_api/matches/{YYYY-MM-DD}.ndjson        ← historique ranked joueurs EUW (à venir)
 silver/leaguepedia/lfl_players/{YYYY-MM-DD}.json   ← joueurs LFL + comptes EUW
 ```
 
 ---
 
-## Tables Bronze ingérées (9 tables)
+## Bronze Oracle's Elixir ✅
+
+13 fichiers CSV ingérés (2014–2026) dans `bronze/oracle_elixir/`.
+
+**Commande :**
+```bash
+uv run python ingestion/oracle_elixir/ingest.py --all
+uv run python ingestion/oracle_elixir/ingest.py --year 2026  # réingestion année courante
+```
+
+---
+
+## Tables Bronze Leaguepedia (9 tables)
 
 | Table | Filtre | Rows approx. |
 |---|---|---|
@@ -97,51 +111,43 @@ uv run python -m pipeline.silver_transforms.lfl_players --date 2026-06-04 --play
 
 ---
 
-## En cours — Trouver les comptes EUW des 136 joueurs manquants
+## Décision Riot API — 7 juin 2026
 
-### Piste 1 — Wikitext (testée, abandonnée)
-Fetch des pages wiki brutes via `mwrogue` → le champ `|ids=` est vide/absent pour ces joueurs. La donnée n'existe pas sur Leaguepedia.
+**Option leaderboard (Master+) abandonnée** — trop coûteux en appels pour un gain incertain.
 
-### Piste 2 — Riot API `league-exp-v4` (en cours)
-Script : `debug_leaderboard.py`
+**Décision finale** : travailler avec les **194 joueurs EUW** identifiés via `SoloqueueIds`.
 
-Fetch tous les joueurs EUW Master+ (~1500) et croise avec les noms LFL 2026.
-
-**Hypothèse** : beaucoup de pros LFL jouent sous leur pseudo comme nom de compte → match par `summonerName.lower()`.
-
-**Non encore exécuté sur le PC fixe.**
-
-```bash
-uv run python debug_leaderboard.py
-```
-
-### Piste 3 — Riot ID guess `playerName#EUW`
-Si la piste 2 est insuffisante, tenter `GET /riot/account/v1/accounts/by-riot-id/{name}/EUW` pour chaque joueur manquant.
-
-### Alternative — Abandonner soloqueue, focus data officielle
-`ScoreboardPlayers` donne déjà stats complètes de chaque game LFL officielle (KDA, gold, CS, damage, vision, champion, side). Suffisant pour champion pool analysis, win rates, patch trends, etc. **La soloqueue est un bonus, pas un prérequis.**
+**Prochain module** : `ingestion/riot_api/ingest.py`
+- Lit le Silver `lfl_players`
+- Prend les 194 joueurs avec compte EUW
+- `GET /riot/account/v1/accounts/by-riot-id/{gameName}/{tagLine}` → récupère les PUUIDs
+- `GET /lol/match/v5/matches/by-puuid/{puuid}/ids` → historique ranked
+- Stockage Bronze : `bronze/riot_api/matches/{YYYY-MM-DD}.ndjson`
 
 ---
 
-## Prochaines étapes possibles
+## Prochaines étapes
 
-1. **Tester `debug_leaderboard.py`** → mesurer taux de match LFL dans Master+
-2. **Réingérer `ScoreboardGames`** → le fichier Bronze contient des données 2012 (avant filtre LFL) → à relancer
-3. **Gold transforms** sur `ScoreboardGames` + `ScoreboardPlayers` :
-   - `fact_match` : stats par match d'équipe
-   - `fact_player_game` : stats individuelles par game
-   - `dim_player`, `dim_team`, `dim_tournament`
-4. **Décider** : enrichissement soloqueue via Riot API ou focus analytics officielle LFL
+1. **`ingestion/riot_api/ingest.py`** — PUUIDs + historique ranked 194 joueurs EUW
+2. **Normalisation Silver** — Oracle's Elixir + Leaguepedia
+3. **Terraform** — infrastructure GCP as code
+4. **dbt Gold** — `fact_match`, `fact_player_game`, `dim_player`, `dim_team`, `dim_tournament`
+5. **FastAPI**
+6. **Rapport BC02**
 
 ---
 
 ## Commandes utiles
 
 ```bash
-# Ingestion complète
+# Ingestion Oracle's Elixir
+uv run python ingestion/oracle_elixir/ingest.py --all
+uv run python ingestion/oracle_elixir/ingest.py --year 2026
+
+# Ingestion Leaguepedia complète
 uv run python -m ingestion.leaguepedia.ingest
 
-# Ingestion table spécifique
+# Ingestion Leaguepedia table spécifique
 uv run python -m ingestion.leaguepedia.ingest --table Players
 
 # Silver transform lfl_players
