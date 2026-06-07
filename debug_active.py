@@ -52,7 +52,7 @@ without_euw = sorted(p for p in active_players if not silver.get(p))
 
 print(f"\nJoueurs LFL actifs (saison 2026) : {len(active_players)}")
 print(
-    f"Avec comptes EUW                 : {len(with_euw)} ({100*len(with_euw)//max(len(active_players),1)}%)"
+    f"Avec comptes EUW                 : {len(with_euw)} ({100 * len(with_euw) // max(len(active_players), 1)}%)"
 )
 print(f"Sans comptes EUW                 : {len(without_euw)}")
 print(f"\nPremiers manquants : {without_euw[:20]}")
