@@ -111,7 +111,9 @@ uv run python -m ingestion.riot_api.ingest --silver-date 2026-06-04
 
 ---
 
-## Silver transforms ✅
+## Silver transforms ⚠️ partiellement complet
+
+> **À FAIRE AVANT DE CONTINUER** : `lfl_player_stats` Silver est basé sur un Bronze ScoreboardPlayers incomplet (16 000 / ~30 000 lignes). Réingérer `ScoreboardPlayers` le lendemain du rate limit (voir Prochaines étapes), puis relancer `lfl_player_stats`. Ne pas charger ce Silver en BigQuery tant qu'il est incomplet.
 
 ### `lfl_players` — `pipeline/silver_transforms/lfl_players.py`
 
@@ -133,27 +135,39 @@ uv run python -m pipeline.silver_transforms.lfl_players --date 2026-06-04 --play
 
 ---
 
-### `lfl_matches` — `pipeline/silver_transforms/lfl_matches.py`
+### `lfl_matches` ✅ — `pipeline/silver_transforms/lfl_matches.py`
 
-**Sources Bronze** : `Tournaments`, `ScoreboardGames`
+**Sources Bronze** : `Tournaments` (filtre LFL), `ScoreboardGames`
+
+**État** : **3 053 lignes** — complet ✅ (`silver/leaguepedia/lfl_matches/2026-06-07.json`)
 
 **Logique** :
 1. Charge `Tournaments` Bronze → extrait les 71 OverviewPages LFL
-2. Charge `ScoreboardGames` Bronze (global, 130 984 lignes) → filtre par OverviewPage → **3 053 lignes**
+2. Charge `ScoreboardGames` Bronze → filtre par OverviewPage → **3 053 lignes LFL**
 3. Normalise chaque ligne :
-   - `DateTime_UTC` → ISO 8601 (`2026-01-15T18:00:00+00:00`)
+   - `DateTime_UTC` → ISO 8601
    - `Gamelength` "MM:SS" → `gamelength_seconds` (int)
-   - Tous les champs numériques (`Team1Gold`, `Team1Kills`, etc.) → `int | None`
+   - Tous les champs numériques → `int | None`
+
+> **Note** : `--tournaments-date` est nécessaire si Tournaments et ScoreboardGames ont des dates d'ingestion différentes.
 
 ```bash
-uv run python -m pipeline.silver_transforms.lfl_matches --date 2026-06-07
+uv run python -m pipeline.silver_transforms.lfl_matches \
+  --date 2026-06-07 \
+  --tournaments-date 2026-06-04
 ```
 
 ---
 
-### `lfl_player_stats` — `pipeline/silver_transforms/lfl_player_stats.py`
+### `lfl_player_stats` ⚠️ INCOMPLET — `pipeline/silver_transforms/lfl_player_stats.py`
 
-**Sources Bronze** : `Tournaments`, `ScoreboardPlayers`
+**Sources Bronze** : `Tournaments` (filtre LFL), `ScoreboardPlayers`
+
+**État** : **16 000 lignes** sur ~30 000 attendues (~53%) ⚠️ (`silver/leaguepedia/lfl_player_stats/2026-06-07.json`)
+
+**Pourquoi incomplet** : le Bronze `ScoreboardPlayers/2026-06-07.json` lui-même n'a que 16 000 lignes — l'ingestion a été tronquée par un rate limit Leaguepedia (quota journalier épuisé après trop de tentatives successives le 7 juin 2026). Voir problème n°13.
+
+**À refaire** : réingérer `ScoreboardPlayers` quand le quota est resté (voir Prochaines étapes), puis relancer ce transform.
 
 **Logique** :
 1. Charge `Tournaments` Bronze → extrait les 71 OverviewPages LFL
@@ -164,7 +178,9 @@ uv run python -m pipeline.silver_transforms.lfl_matches --date 2026-06-07
    - `DateTime_UTC` → ISO 8601
 
 ```bash
-uv run python -m pipeline.silver_transforms.lfl_player_stats --date 2026-06-07
+uv run python -m pipeline.silver_transforms.lfl_player_stats \
+  --date <date-reingestion-ScoreboardPlayers> \
+  --tournaments-date 2026-06-04
 ```
 
 ---
@@ -411,8 +427,16 @@ uv run python -m ingestion.riot_api.ingest --silver-date 2026-06-04
 
 # Silver transforms
 uv run python -m pipeline.silver_transforms.lfl_players --date 2026-06-04 --players-date 2026-06-05
-uv run python -m pipeline.silver_transforms.lfl_matches --date 2026-06-07
-uv run python -m pipeline.silver_transforms.lfl_player_stats --date 2026-06-07
+
+# lfl_matches : --tournaments-date = date d'ingestion de Tournaments (peut différer de --date)
+uv run python -m pipeline.silver_transforms.lfl_matches \
+  --date 2026-06-07 \
+  --tournaments-date 2026-06-04
+
+# lfl_player_stats : ⚠️ réingérer ScoreboardPlayers d'abord, puis lancer avec la bonne date
+uv run python -m pipeline.silver_transforms.lfl_player_stats \
+  --date <date-reingestion> \
+  --tournaments-date 2026-06-04
 
 # Tests
 uv run pytest tests/ -v
