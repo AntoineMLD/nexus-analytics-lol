@@ -12,6 +12,8 @@ sources:
         description: "Stats joueurs LFL normalisées (ScoreboardPlayers Silver)."
       - name: lfl_players
         description: "Joueurs LFL avec leurs comptes EUW Soloqueue."
+      - name: lfl_drafts
+        description: "Actions de draft LFL (picks et bans) dépivotées depuis PicksAndBansS7."
 
 models:
   - name: stg_lfl_matches
@@ -66,3 +68,19 @@ models:
           - accepted_values:
               arguments:
                 values: ["Top", "Jungle", "Mid", "Bot", "Support"]
+
+  - name: stg_lfl_drafts
+    description: "Vue staging sur lfl_drafts : une ligne par action pick/ban par partie."
+    columns:
+      - name: game_id
+        tests:
+          - not_null
+      - name: champion
+        tests:
+          - not_null
+      - name: action_type
+        tests:
+          - not_null
+      - name: team_side
+        tests:
+          - not_null

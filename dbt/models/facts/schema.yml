@@ -51,3 +51,29 @@ models:
         description: "Taux de sélection en pourcentage du total de parties du tournoi+patch."
       - name: win_rate_pct
         description: "Taux de victoire en pourcentage pour ce champion sur ce patch."
+
+  - name: fact_draft
+    description: >
+      Table de faits draft : une ligne par action (pick ou ban) par partie LFL.
+      Permet d'analyser les stratégies de draft des équipes (champion priorities,
+      first pick/ban, win rates par position dans le draft).
+    columns:
+      - name: game_id
+        description: "Identifiant de la partie."
+        tests:
+          - not_null
+      - name: champion
+        description: "Champion sélectionné ou banni."
+        tests:
+          - not_null
+      - name: action_type
+        description: "Type d'action : 'pick' ou 'ban'."
+        tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: ["pick", "ban"]
+      - name: team_side
+        description: "Côté de l'équipe dans la partie : 1 (bleu) ou 2 (rouge)."
+        tests:
+          - not_null
