@@ -12,15 +12,17 @@ models:
         tests:
           - not_null
           - relationships:
-              to: ref('stg_lfl_matches')
-              field: game_id
+              arguments:
+                to: ref('stg_lfl_matches')
+                field: game_id
       - name: player_link
         description: "Clé étrangère vers dim_player."
         tests:
           - not_null
           - relationships:
-              to: ref('dim_player')
-              field: player_id
+              arguments:
+                to: ref('dim_player')
+                field: player_id
       - name: player_win
         description: "True si le joueur a gagné cette partie."
       - name: kda_ratio

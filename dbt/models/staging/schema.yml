@@ -47,8 +47,9 @@ models:
         tests:
           - not_null
           - relationships:
-              to: ref('stg_lfl_matches')
-              field: game_id
+              arguments:
+                to: ref('stg_lfl_matches')
+                field: game_id
       - name: player_link
         description: "Identifiant wiki du joueur (clé dans dim_player)."
         tests:
@@ -63,4 +64,5 @@ models:
         tests:
           - not_null
           - accepted_values:
-              values: ["Top", "Jungle", "Mid", "Bot", "Support"]
+              arguments:
+                values: ["Top", "Jungle", "Mid", "Bot", "Support"]
