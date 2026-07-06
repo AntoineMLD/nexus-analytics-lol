@@ -464,23 +464,22 @@ gcloud auth application-default set-quota-project nexus-analytics-prod-498107
     L'impact est minimal : les NDJSON GCS remplissent le même rôle de zone Silver normalisée."
   Recommandation : **Option B** — plus rapide, honnête, démontre la capacité d'adaptation.
 
-- [ ] **Déploiement Cloud Run** — le planning et le rapport promettent FastAPI sur Cloud Run.
-  Actuellement : `uvicorn api.main:app --reload` en local uniquement.
-  À faire :
-  1. Ajouter `Dockerfile` à la racine du projet
-  2. Ajouter `google_cloud_run_service` dans `terraform/`
-  3. Déployer : `gcloud run deploy nexus-api --source . --region europe-west1`
+- [x] **Déploiement Cloud Run** — `Dockerfile` + `terraform/cloudrun.tf` créés. ✅ 2026-07-06
+  Déploiement réel (après `gcloud builds submit`) :
+  ```
+  gcloud builds submit --tag europe-west1-docker.pkg.dev/$PROJECT_ID/nexus/api:latest .
+  terraform apply -target=google_cloud_run_v2_service.nexus_api
+  ```
 
 - [ ] **`dim_team_alias` (seeds dbt)** — mapping des noms d'équipes entre Oracle's Elixir et Leaguepedia.
   Yasmine l'a explicitement signalé : "Team BDS Academy" vs "BDS Academy" vs "BDSA".
   Fichier : `dbt/seeds/dim_team_alias.csv` + utilisation dans Silver transforms.
 
-- [ ] **Script d'orchestration `pipeline/orchestration/run_pipeline.py`** — enchaîne toutes les étapes
-  du pipeline dans l'ordre : ingest → silver → bq_loader → dbt run.
-  Mentionné dans le planning comme livrable de S14.
+- [x] **Script d'orchestration `pipeline/orchestration/run_pipeline.py`** — ✅ 2026-07-06
+  Enchaîne ingest → silver → bq_loader → dbt run. Pas de cron configuré — lancement manuel.
+  Flags : `--skip-ingest`, `--dbt-only`, `--date YYYY-MM-DD`.
 
-- [ ] **Mise à jour `docs/MERISE_MCD_MPD.md`** avec les nouveaux modèles (dim_champion, dim_patch,
-  fact_draft, fact_meta_trend) — implémentés, à documenter dans le schéma MPD.
+- [x] **Mise à jour `docs/MERISE_MCD_MPD.md`** — dim_champion, dim_patch, fact_draft, fact_meta_trend documentés. ✅ 2026-07-06
 
 - [x] **`.env.example`** — créé avec toutes les variables commentées. ✅ 2026-07-06
 

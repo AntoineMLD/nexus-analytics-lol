@@ -32,3 +32,13 @@ output "api_service_account" {
   description = "Email du compte de service API."
   value       = google_service_account.api.email
 }
+
+output "cloud_run_url" {
+  description = "URL publique du service Cloud Run nexus-api."
+  value       = google_cloud_run_v2_service.nexus_api.uri
+}
+
+output "artifact_registry_repo" {
+  description = "URL du dépôt Artifact Registry pour pousser les images Docker."
+  value       = "${var.region}-docker.pkg.dev/${var.project_id}/nexus"
+}
