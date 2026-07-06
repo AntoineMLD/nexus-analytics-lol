@@ -24,11 +24,34 @@ Usage:
 
 import argparse
 import json
+import re
 from datetime import UTC, datetime
 
 from ingestion.utils import gcs_client, logger, send_discord_notification, settings
 
 LFL_LEAGUES = {"La Ligue Française", "La Ligue Française Division 2"}
+
+
+def to_snake_case(name: str) -> str:
+    """Convert a CamelCase or mixed field name to snake_case.
+
+    Handles fields with existing underscores (e.g. N_GameInMatch) by collapsing
+    consecutive underscores after the conversion.
+
+    Examples:
+        >>> to_snake_case("Team1Gold")
+        'team1_gold'
+        >>> to_snake_case("N_GameInMatch")
+        'n_game_in_match'
+        >>> to_snake_case("DamageToChampions")
+        'damage_to_champions'
+        >>> to_snake_case("CS")
+        'cs'
+    """
+    s = re.sub(r"([A-Z]+)([A-Z][a-z])", r"\1_\2", name)
+    s = re.sub(r"([a-z\d])([A-Z])", r"\1_\2", s)
+    return re.sub(r"_+", "_", s).lower()
+
 
 INT_FIELDS = [
     "Team1Score",
@@ -153,8 +176,7 @@ def normalize_row(row: dict) -> dict:
         "gamelength_seconds": parse_gamelength_seconds(row.get("Gamelength")),
     }
     for field in INT_FIELDS:
-        snake_key = field[0].lower() + field[1:]
-        normalized[snake_key] = cast_int(row.get(field))
+        normalized[to_snake_case(field)] = cast_int(row.get(field))
 
     return normalized
 

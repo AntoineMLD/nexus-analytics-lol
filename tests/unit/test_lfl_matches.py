@@ -145,14 +145,14 @@ class TestNormalizeRow:
 
     def test_int_fields_cast(self):
         result = normalize_row(self._make_row())
-        assert result["team1Gold"] == 58000
-        assert result["team1Kills"] == 15
-        assert result["n_GameInMatch"] == 1
+        assert result["team1_gold"] == 58000
+        assert result["team1_kills"] == 15
+        assert result["n_game_in_match"] == 1
 
     def test_missing_optional_fields_become_none(self):
         row = {"GameId": "abc"}
         result = normalize_row(row)
-        assert result["team1Gold"] is None
+        assert result["team1_gold"] is None
         assert result["gamelength_seconds"] is None
         assert result["datetime_utc"] is None
 

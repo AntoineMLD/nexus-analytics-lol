@@ -122,7 +122,7 @@ class TestNormalizeRow:
         assert result["kills"] == 5
         assert result["deaths"] == 1
         assert result["gold"] == 14500
-        assert result["cS"] == 280
+        assert result["cs"] == 280
 
     def test_datetime_parsed(self):
         result = normalize_row(self._make_row())

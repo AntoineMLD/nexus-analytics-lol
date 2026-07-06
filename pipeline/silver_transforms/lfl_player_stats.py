@@ -20,11 +20,29 @@ Usage:
 
 import argparse
 import json
+import re
 from datetime import UTC, datetime
 
 from ingestion.utils import gcs_client, logger, send_discord_notification, settings
 
 LFL_LEAGUES = {"La Ligue Française", "La Ligue Française Division 2"}
+
+
+def to_snake_case(name: str) -> str:
+    """Convert a CamelCase or mixed field name to snake_case.
+
+    Examples:
+        >>> to_snake_case("DamageToChampions")
+        'damage_to_champions'
+        >>> to_snake_case("VisionScore")
+        'vision_score'
+        >>> to_snake_case("CS")
+        'cs'
+    """
+    s = re.sub(r"([A-Z]+)([A-Z][a-z])", r"\1_\2", name)
+    s = re.sub(r"([a-z\d])([A-Z])", r"\1_\2", s)
+    return re.sub(r"_+", "_", s).lower()
+
 
 INT_FIELDS = ["Kills", "Deaths", "Assists", "Gold", "CS", "DamageToChampions", "VisionScore"]
 
@@ -117,8 +135,7 @@ def normalize_row(row: dict) -> dict:
         "player_win": parse_player_win(row.get("PlayerWin")),
     }
     for field in INT_FIELDS:
-        snake_key = field[0].lower() + field[1:]
-        normalized[snake_key] = cast_int(row.get(field))
+        normalized[to_snake_case(field)] = cast_int(row.get(field))
 
     return normalized
 
