@@ -177,7 +177,11 @@ def normalize_row(row: dict) -> dict:
         "gamelength_seconds": parse_gamelength_seconds(row.get("Gamelength")),
     }
     for field in INT_FIELDS:
-        normalized[to_snake_case(field)] = cast_int(row.get(field))
+        # Cargo API returns field names with spaces (e.g. "N GameInMatch"),
+        # but INT_FIELDS uses the CamelCase convention (e.g. "N_GameInMatch").
+        # Try the original key first, then fall back to the space variant.
+        value = row.get(field) if row.get(field) is not None else row.get(field.replace("_", " "))
+        normalized[to_snake_case(field)] = cast_int(value)
 
     return normalized
 
