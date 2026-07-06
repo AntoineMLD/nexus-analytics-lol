@@ -28,7 +28,7 @@ import subprocess
 import sys
 from datetime import UTC, datetime
 
-from ingestion.utils import logger, send_discord_notification
+from ingestion.utils import gcs_client, logger, send_discord_notification, settings
 
 # Tables Silver à charger dans BigQuery dans cet ordre.
 # L'ordre compte : stg_lfl_drafts dépend de lfl_matches en dbt,
@@ -39,6 +39,32 @@ SILVER_TABLES: list[tuple[str, str]] = [
     ("leaguepedia", "lfl_players"),
     ("leaguepedia", "lfl_drafts"),
 ]
+
+
+def find_latest_bronze_date() -> str:
+    """Detect the most recent ingestion date from GCS Bronze by listing Tournaments files.
+
+    The Tournaments table is always ingested first and is a reliable proxy for
+    the latest available Bronze date across all Leaguepedia tables.
+
+    Returns:
+        Date string in 'YYYY-MM-DD' format (e.g. '2026-06-04').
+
+    Raises:
+        FileNotFoundError: If no Bronze file is found (ingestion never ran).
+    """
+    prefix = "bronze/leaguepedia/Tournaments/"
+    with gcs_client() as client:
+        blobs = list(client.bucket(settings.gcs_bucket_name).list_blobs(prefix=prefix))
+    if not blobs:
+        raise FileNotFoundError(
+            f"No Bronze Tournaments file found in gs://{settings.gcs_bucket_name}/{prefix}. "
+            "Run ingestion first (without --skip-ingest)."
+        )
+    latest = max(blobs, key=lambda b: b.name)
+    date = latest.name.split("/")[-1].replace(".json", "")
+    logger.info("Auto-detected latest Bronze date: %s", date)
+    return date
 
 
 def _run(cmd: list[str], step_name: str) -> int:
@@ -172,10 +198,24 @@ def main() -> None:
             if not run_ingestion():
                 failures.append("ingestion")
 
-        if not run_silver_transforms(args.date):
+        # Résoudre la date Bronze une seule fois pour toutes les étapes suivantes.
+        # Si --date n'est pas fourni, on détecte la dernière date disponible en GCS.
+        # Sans cette résolution, chaque transform chercherait le fichier du jour
+        # (date par défaut = aujourd'hui) et échouerait si l'ingestion n'a pas tourné le même jour.
+        resolved_date = args.date
+        if resolved_date is None:
+            try:
+                resolved_date = find_latest_bronze_date()
+            except FileNotFoundError as exc:
+                logger.error(str(exc))
+                failures.append("silver_transforms")
+                failures.append("bq_loaders")
+                resolved_date = None
+
+        if resolved_date and not run_silver_transforms(resolved_date):
             failures.append("silver_transforms")
 
-        if not run_bq_loaders(args.date):
+        if resolved_date and not run_bq_loaders(resolved_date):
             failures.append("bq_loaders")
 
         if not run_dbt():
