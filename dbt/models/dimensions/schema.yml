@@ -29,3 +29,29 @@ models:
           - not_null
       - name: win_rate_pct
         description: "Taux de victoire en pourcentage (0-100)."
+
+  - name: dim_champion
+    description: "Dimension champions : statistiques agrégées par champion sur toutes les parties LFL."
+    columns:
+      - name: champion
+        description: "Nom du champion (clé primaire)."
+        tests:
+          - not_null
+          - unique
+      - name: total_games_played
+        tests:
+          - not_null
+      - name: win_rate_pct
+        description: "Taux de victoire global en pourcentage (0-100)."
+
+  - name: dim_patch
+    description: "Dimension patches : une ligne par version du jeu observée en LFL."
+    columns:
+      - name: patch
+        description: "Version du patch (ex: 14.5), clé primaire."
+        tests:
+          - not_null
+          - unique
+      - name: total_games
+        tests:
+          - not_null

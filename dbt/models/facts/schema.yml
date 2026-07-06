@@ -29,3 +29,25 @@ models:
         description: "(kills + assists) / max(deaths, 1) — arrondi à 2 décimales."
       - name: gamelength_seconds
         description: "Durée de la partie en secondes (issu du match)."
+
+  - name: fact_meta_trend
+    description: >
+      Table de faits méta : pick rates et winrates par champion, patch et tournoi.
+      Granularité : (champion, patch, overview_page).
+    columns:
+      - name: champion
+        description: "Nom du champion."
+        tests:
+          - not_null
+      - name: patch
+        description: "Version du patch."
+        tests:
+          - not_null
+      - name: overview_page
+        description: "Tournoi/split (clé étrangère vers stg_lfl_matches)."
+        tests:
+          - not_null
+      - name: pick_rate_pct
+        description: "Taux de sélection en pourcentage du total de parties du tournoi+patch."
+      - name: win_rate_pct
+        description: "Taux de victoire en pourcentage pour ce champion sur ce patch."
