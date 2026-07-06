@@ -418,9 +418,9 @@ gcloud auth application-default set-quota-project nexus-analytics-prod-498107
    - `lfl_matches/2026-06-07.json` → table `raw.lfl_matches`
    - `lfl_player_stats/2026-06-05.json` → table `raw.lfl_player_stats`
    - `lfl_players/2026-06-04.json` → table `raw.lfl_players`
-2. **dbt Gold** — `fact_player_game`, `dim_player`, `dim_team` (modèles déjà écrits)
-3. **Terraform** — BQ dataset, tables, IAM as code
-4. **FastAPI** — endpoints sur les Gold
+2. **dbt Gold** ✅ — `fact_player_game`, `dim_player`, `dim_team` opérationnels dans BigQuery
+3. **FastAPI** ✅ — 3 endpoints (`/players`, `/players/{id}`, `/matches`), auth X-API-Key, OpenAPI `/docs`
+4. **Terraform** — BQ dataset, GCS bucket, IAM, lifecycle Bronze 90j (prochaine étape)
 5. **Rapport BC02**
 
 ---
@@ -435,8 +435,9 @@ gcloud auth application-default set-quota-project nexus-analytics-prod-498107
 | `pipeline/silver_transforms/lfl_matches.py` | `test_lfl_matches.py` | ✅ 31 tests |
 | `pipeline/silver_transforms/lfl_player_stats.py` | `test_lfl_player_stats.py` | ✅ 25 tests |
 | `pipeline/silver_transforms/lfl_players.py` | — | ❌ non couvert |
+| `api/` (FastAPI endpoints) | `test_api.py` | ✅ 15 tests |
 
-**Total : 112 tests unitaires**
+**Total : 129 tests unitaires**
 
 ---
 
@@ -467,6 +468,12 @@ uv run python -m pipeline.silver_transforms.lfl_matches \
 uv run python -m pipeline.silver_transforms.lfl_player_stats \
   --date <date-reingestion> \
   --tournaments-date 2026-06-04
+
+# API FastAPI
+uv run uvicorn api.main:app --reload
+# Docs interactives : http://localhost:8000/docs
+# Exemple curl :
+# curl -H "X-API-Key: nexus-dev-secret-change-in-prod" http://localhost:8000/players
 
 # Tests
 uv run pytest tests/ -v
