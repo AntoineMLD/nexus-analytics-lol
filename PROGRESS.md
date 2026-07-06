@@ -414,14 +414,47 @@ gcloud auth application-default set-quota-project nexus-analytics-prod-498107
 
 ## Prochaines étapes
 
-1. **BigQuery loader** — charger les Silver dans BQ (`pipeline/loaders/bq_loader.py`) :
-   - `lfl_matches/2026-06-07.json` → table `raw.lfl_matches`
-   - `lfl_player_stats/2026-06-05.json` → table `raw.lfl_player_stats`
-   - `lfl_players/2026-06-04.json` → table `raw.lfl_players`
-2. **dbt Gold** ✅ — `fact_player_game`, `dim_player`, `dim_team` opérationnels dans BigQuery
+1. **BigQuery loader** ✅ — Silver chargé dans `raw.lfl_matches`, `raw.lfl_player_stats`, `raw.lfl_players`
+2. **dbt Gold** ✅ — `fact_player_game`, `dim_player`, `dim_team` opérationnels dans BigQuery (`gold_gold`)
 3. **FastAPI** ✅ — 3 endpoints (`/players`, `/players/{id}`, `/matches`), auth X-API-Key, OpenAPI `/docs`
-4. **Terraform** — BQ dataset, GCS bucket, IAM, lifecycle Bronze 90j (prochaine étape)
-5. **Rapport BC02**
+4. **Terraform** ✅ — IaC complet : bucket GCS, datasets BQ, 2 SA + IAM — `terraform apply` exécuté avec succès
+5. **Documents certification** ← prochaine priorité
+   - MCD/MPD MERISE (C11)
+   - Registre RGPD (C11/C16)
+6. **Tests `lfl_players.py`** — module non couvert (❌)
+7. **Rapport BC02**
+
+---
+
+## Terraform ✅ (2026-07-06)
+
+Infrastructure GCP déclarée en code dans `terraform/` et appliquée avec succès.
+
+**Ressources gérées :**
+
+| Ressource | Description |
+|---|---|
+| `google_storage_bucket.main` | Bucket `nexus-analytics-bucket` (EU) — lifecycle Bronze → Coldline après 90j |
+| `google_bigquery_dataset.raw` | Dataset Silver chargé par `bq_loader.py` |
+| `google_bigquery_dataset.gold_gold` | Tables dbt (dim_player, dim_team, fact_player_game) — expiration 24 mois |
+| `google_bigquery_dataset.gold_staging` | Vues dbt staging |
+| `google_service_account.ingestion` | SA `nexus-ingestion` — GCS objectAdmin + BQ dataEditor raw |
+| `google_service_account.api` | SA `nexus-api` — BQ dataViewer gold uniquement |
+| IAM bindings (×4) | `bigquery.jobUser` au niveau projet pour les deux SA |
+
+**Commandes :**
+```bash
+cd terraform
+terraform init
+terraform plan
+terraform apply
+```
+
+**Problème #16 — Bucket en région EU vs europe-west1**
+
+Symptôme : `terraform plan` affichait `-/+ destroy and recreate` sur le bucket (changement de région `EU` → `EUROPE-WEST1`). Aurait supprimé toutes les données Bronze/Silver.
+
+Solution : le bucket existant a été créé en multi-région `EU`. GCS n'autorise pas de changer la région. Corrigé en fixant `location = "EU"` dans `gcs.tf` pour matcher l'état réel. Les nouvelles ressources seraient à créer en `europe-west1`.
 
 ---
 
@@ -474,6 +507,10 @@ uv run uvicorn api.main:app --reload
 # Docs interactives : http://localhost:8000/docs
 # Exemple curl :
 # curl -H "X-API-Key: nexus-dev-secret-change-in-prod" http://localhost:8000/players
+
+# Terraform
+cd terraform && terraform plan
+cd terraform && terraform apply
 
 # Tests
 uv run pytest tests/ -v

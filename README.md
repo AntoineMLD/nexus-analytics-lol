@@ -24,15 +24,15 @@ Sources externes
         ▼
 
 GCS Bronze   ──►   GCS Silver   ──►   BigQuery Gold   ──►   API FastAPI
-(données brutes)  (Python transforms)  (bq_loader + dbt)   (planifiée)
+(données brutes)  (Python transforms)  (bq_loader + dbt)   (/players, /matches)
 ```
 
 | Couche | Rôle | Technologie | Statut |
 |--------|------|-------------|--------|
 | Bronze | Données brutes, sans transformation | Google Cloud Storage (NDJSON) | ✅ Implémenté |
 | Silver | Nettoyage, typage, filtrage LFL | Python → Google Cloud Storage | ✅ Implémenté |
-| Gold | Agrégats métier, modèles dimensionnels | BigQuery + dbt | ✅ Modèles écrits — BQ à provisionner |
-| API | Exposition des données Silver/Gold | FastAPI | 🔧 Planifiée |
+| Gold | Agrégats métier, modèles dimensionnels | BigQuery + dbt | ✅ Opérationnel |
+| API | Exposition des données Gold | FastAPI | ✅ Opérationnel |
 
 ---
 
@@ -62,8 +62,18 @@ dbt/
     dimensions/         # dim_team.sql, dim_player.sql
     facts/              # fact_player_game.sql (KDA ratio calculé)
 
-api/                    # API FastAPI (planifiée)
-terraform/              # Infrastructure GCP as code (planifié)
+api/
+  main.py               # App FastAPI — 3 endpoints + /health
+  auth.py               # Dépendance X-API-Key
+  database.py           # Requêtes BigQuery Gold paramétrées
+  models.py             # Schémas Pydantic (PlayerSummary, MatchSummary…)
+terraform/
+  main.tf               # Provider Google + version
+  variables.tf          # project_id, region, bucket_name, seuils lifecycle
+  gcs.tf                # Bucket GCS + lifecycle Bronze → Coldline (90j)
+  bigquery.tf           # Datasets raw, gold_gold (expiration 24 mois), gold_staging
+  iam.tf                # SA nexus-ingestion + SA nexus-api + IAM bindings
+  outputs.tf            # Emails SA, noms datasets
 tests/
   unit/                 # 129 tests unitaires, offline, sans credentials
 docs/
@@ -170,14 +180,46 @@ dbt docs serve # Générer et ouvrir la documentation
 
 ---
 
+## Lancer l'API
+
+```bash
+uv run uvicorn api.main:app --reload
+```
+
+Docs interactives disponibles sur `http://localhost:8000/docs`.
+
+Authentification : header `X-API-Key` obligatoire (valeur définie dans `NEXUS_API_KEY`).
+
+```bash
+# Exemple
+curl -H "X-API-Key: <NEXUS_API_KEY>" http://localhost:8000/players?min_games=20
+curl -H "X-API-Key: <NEXUS_API_KEY>" "http://localhost:8000/matches?team=Karmine+Corp"
+```
+
+---
+
+## Infrastructure (Terraform)
+
+```bash
+cd terraform
+terraform init
+terraform plan   # aperçu des changements
+terraform apply  # appliquer sur GCP
+```
+
+Ressources provisionnées : bucket GCS `nexus-analytics-bucket`, datasets BigQuery `raw` / `gold_gold` / `gold_staging`, comptes de service `nexus-ingestion` et `nexus-api` avec IAM minimal.
+
+---
+
 ## Tests
 
 ```bash
 # Suite complète (129 tests, ~70s)
-uv run pytest tests/unit/ -v
+uv run pytest tests/ -v
 
 # Tests d'un module spécifique
-uv run pytest tests/unit/test_lfl_players.py -v
+uv run pytest tests/test_api.py -v
+uv run pytest tests/test_lfl_matches.py -v
 ```
 
 Les tests unitaires tournent **sans credentials ni accès réseau** — tous les appels GCS et HTTP sont mockés avec `unittest.mock`.
@@ -193,8 +235,8 @@ Les tests unitaires tournent **sans credentials ni accès réseau** — tous les
 | Stockage (Bronze + Silver) | Google Cloud Storage |
 | Entrepôt de données (Gold) | BigQuery |
 | Transformations (Gold) | dbt (5 modèles : staging, dim, facts) |
-| API | FastAPI — planifiée |
-| Infrastructure | Terraform — planifié |
+| API | FastAPI (3 endpoints, auth X-API-Key, OpenAPI `/docs`) |
+| Infrastructure as Code | Terraform (bucket GCS, datasets BQ, IAM, lifecycle) |
 | Config / secrets | pydantic-settings + .env |
 | Linting | Ruff |
 | Tests | pytest + unittest.mock |
