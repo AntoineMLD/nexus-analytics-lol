@@ -124,7 +124,8 @@ def normalize_row(row: dict) -> dict:
         "match_id": row.get("MatchId"),
         "overview_page": row.get("OverviewPage"),
         "tournament": row.get("Tournament"),
-        "datetime_utc": parse_datetime(row.get("DateTime_UTC")),
+        # Cargo API returns "DateTime UTC" with a space, not an underscore.
+        "datetime_utc": parse_datetime(row.get("DateTime UTC") or row.get("DateTime_UTC")),
         "team": row.get("Team"),
         "team_vs": row.get("TeamVs"),
         "player_link": row.get("Link"),

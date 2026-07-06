@@ -114,6 +114,8 @@ uv run python -m ingestion.riot_api.ingest --silver-date 2026-06-04
 
 ## Silver transforms ✅ complet
 
+> **Validation qualité** — voir `pipeline/quality_checks/lfl_completeness.py` pour le rapport de réconciliation complet (méthodes 1→5). Résumé ci-dessous.
+
 ### `lfl_players` — `pipeline/silver_transforms/lfl_players.py`
 
 **Sources Bronze** : `Tournaments`, `TournamentRosters`, `Players`
@@ -158,15 +160,11 @@ uv run python -m pipeline.silver_transforms.lfl_matches \
 
 ---
 
-### `lfl_player_stats` ⚠️ INCOMPLET — `pipeline/silver_transforms/lfl_player_stats.py`
+### `lfl_player_stats` ✅ — `pipeline/silver_transforms/lfl_player_stats.py`
 
 **Sources Bronze** : `Tournaments` (filtre LFL), `ScoreboardPlayers`
 
-**État** : **16 000 lignes** sur ~30 000 attendues (~53%) ⚠️ (`silver/leaguepedia/lfl_player_stats/2026-06-07.json`)
-
-**Pourquoi incomplet** : le Bronze `ScoreboardPlayers/2026-06-07.json` lui-même n'a que 16 000 lignes — l'ingestion a été tronquée par un rate limit Leaguepedia (quota journalier épuisé après trop de tentatives successives le 7 juin 2026). Voir problème n°13.
-
-**À refaire** : réingérer `ScoreboardPlayers` quand le quota est resté (voir Prochaines étapes), puis relancer ce transform.
+**État** : **30 530 lignes** — complet ✅ (`silver/leaguepedia/lfl_player_stats/2026-06-05.json`)
 
 **Logique** :
 1. Charge `Tournaments` Bronze → extrait les 71 OverviewPages LFL
@@ -344,7 +342,42 @@ gcloud auth application-default set-quota-project nexus-analytics-prod-498107
 - **`auto_continue=True` de mwcleric** est le mécanisme correct pour la pagination Leaguepedia : il utilise `limit=max` côté serveur (beaucoup moins de requêtes que notre boucle manuelle de 500/page)
 - **Planifier les réingestions** en dehors des heures de développement actif pour ne pas épuiser le quota
 
-**Solution finale retenue** : `fetch_lfl_filtered_table()` qui utilise `site.cargo_client.query()` sans `limit` (auto_continue=True) + `order_by` pour pagination stable. Réingestion ScoreboardPlayers à planifier le lendemain matin.
+**Solution finale retenue** : filtre `WHERE OverviewPage LIKE 'LFL/%'` — une seule condition LIKE qui couvre LFL D1 et Division 2, sans JOIN ni liste IN, sans déclencher de rate limit agressif. La clé `where` du `TABLE_CONFIGS` est transmise à `fetch_all_rows()` via `run_ingestion()`.
+
+**Données de référence correctes** : `ScoreboardPlayers/2026-06-05.json` (30 530 lignes, 71/71 tournois) était déjà complet depuis le 5 juin. L'audit GCS du 6 juillet a révélé que les fichiers des tentatives ultérieures étaient soit corrompus (2026-06-04 : données MLG 2012), soit incomplets (2026-06-07 : 16 000 lignes). Ces fichiers ont été supprimés de GCS.
+
+---
+
+### 14. Champ `DateTime UTC` — espace vs underscore
+
+**Date** : 6 juillet 2026
+
+**Symptôme** : les Silver transforms `lfl_matches` et `lfl_player_stats` produisaient `datetime_utc: null` pour toutes les lignes. Le quality check `lfl_completeness.py` affichait `N/A` dans les colonnes Date min/max.
+
+**Cause** : le Cargo API Leaguepedia retourne le champ sous la clé `"DateTime UTC"` (avec un espace), mais les transforms appelaient `row.get("DateTime_UTC")` (avec underscore). Résultat : la date était silencieusement ignorée.
+
+**Solution** : `row.get("DateTime UTC") or row.get("DateTime_UTC")` — supporte les deux formats pour la robustesse.
+
+---
+
+### 15. Validation exhaustivité des données — démarche qualité
+
+**Date** : 6 juillet 2026
+
+**Contexte** : après plusieurs réingestions, doute légitime sur la complétude des données LFL. Un audit GCS puis une réconciliation multi-sources ont été réalisés.
+
+**Script** : `pipeline/quality_checks/lfl_completeness.py` — 5 méthodes de vérification :
+1. Cohérence du format de ligue (round-robin attendu vs obtenu)
+2. Réconciliation tournoi par tournoi (71 pages × game count + date min/max)
+3. Bornes temporelles par tournoi
+4. Intégrité structurelle (0 duplicate game_id, 0 game sans vainqueur, 0 game ≠ 10 joueurs)
+5. Croisement Oracle's Elixir par année
+
+**Résultats** :
+- Méthodes 2+3+4 : 71/71 ✅, 0 anomalie structurelle ✅
+- Méthode 5 — convergence D1 : 2019=0, 2022=0, 2023=1, 2025=5 games d'écart ✅
+- Écart résiduel 2021 D1 : OE=240 vs LP=222 (18 games). Oracle's Elixir pourrait comptabiliser certains matchs de qualification ou un format de bracket différent. Non bloquant : toutes les pages du Tournaments Bronze sont présentes avec des counts cohérents avec le format double round-robin.
+- LP total > OE total (+350 games) s'explique par la couverture LFL D2 absente d'Oracle's Elixir en 2020 et partielle en 2021/2024.
 
 ---
 
@@ -381,16 +414,14 @@ gcloud auth application-default set-quota-project nexus-analytics-prod-498107
 
 ## Prochaines étapes
 
-1. **Demain matin** — réingérer `ScoreboardPlayers` (cooldown Leaguepedia) :
-   ```bash
-   uv run python -m ingestion.leaguepedia.ingest --table ScoreboardPlayers
-   uv run python -m pipeline.silver_transforms.lfl_player_stats --date <YYYY-MM-DD> --tournaments-date 2026-06-04
-   ```
-2. **BigQuery loader** — `pipeline/loaders/bigquery_loader.py` pour charger les Silver dans BQ
-3. **dbt Gold** — `fact_player_game`, `dim_player`, `dim_team`, `dim_champion`
-4. **Terraform** — BQ dataset, tables, IAM as code
-5. **FastAPI** — endpoints sur les Gold
-6. **Rapport BC02**
+1. **BigQuery loader** — charger les Silver dans BQ (`pipeline/loaders/bq_loader.py`) :
+   - `lfl_matches/2026-06-07.json` → table `raw.lfl_matches`
+   - `lfl_player_stats/2026-06-05.json` → table `raw.lfl_player_stats`
+   - `lfl_players/2026-06-04.json` → table `raw.lfl_players`
+2. **dbt Gold** — `fact_player_game`, `dim_player`, `dim_team` (modèles déjà écrits)
+3. **Terraform** — BQ dataset, tables, IAM as code
+4. **FastAPI** — endpoints sur les Gold
+5. **Rapport BC02**
 
 ---
 
