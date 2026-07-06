@@ -11,30 +11,38 @@ MAX_PAGE_SIZE = 8000
 
 TABLE_CONFIGS: dict[str, dict] = {
     "ScoreboardGames": {
-        "tables": "ScoreboardGames=SG,Tournaments=T",
-        "join_on": "SG.OverviewPage=T.OverviewPage",
         "fields": (
-            "SG.OverviewPage,SG.Tournament,SG.Team1,SG.Team2,SG.WinTeam,SG.LossTeam,"
-            "SG.DateTime_UTC,SG.Team1Score,SG.Team2Score,SG.Winner,"
-            "SG.Gamelength,SG.Gamelength_Number,"
-            "SG.Team1Dragons,SG.Team2Dragons,SG.Team1Barons,SG.Team2Barons,"
-            "SG.Team1Towers,SG.Team2Towers,SG.Team1Gold,SG.Team2Gold,"
-            "SG.Team1Kills,SG.Team2Kills,SG.Team1RiftHeralds,SG.Team2RiftHeralds,"
-            "SG.Team1VoidGrubs,SG.Team2VoidGrubs,SG.Team1Inhibitors,SG.Team2Inhibitors,"
-            "SG.Patch,SG.GameId,SG.MatchId,SG.N_GameInMatch"
+            "OverviewPage,Tournament,Team1,Team2,WinTeam,LossTeam,"
+            "DateTime_UTC,Team1Score,Team2Score,Winner,"
+            "Gamelength,Gamelength_Number,"
+            "Team1Dragons,Team2Dragons,Team1Barons,Team2Barons,"
+            "Team1Towers,Team2Towers,Team1Gold,Team2Gold,"
+            "Team1Kills,Team2Kills,Team1RiftHeralds,Team2RiftHeralds,"
+            "Team1VoidGrubs,Team2VoidGrubs,Team1Inhibitors,Team2Inhibitors,"
+            "Patch,GameId,MatchId,N_GameInMatch"
         ),
-        "where": "T.League='La Ligue Française' OR T.League='La Ligue Française Division 2'",
+        # lfl_filter=True: uses OverviewPage IN (...) WHERE clause instead of a Cargo join.
+        # The mwcleric join_on parameter is silently ignored by the MediaWiki API
+        # (expects 'join on' with space, receives 'join_on' with underscore).
+        "lfl_filter": True,
+        # order_by ensures stable pagination with Cargo's auto_continue mechanism.
+        "order_by": "DateTime_UTC",
         "limit": 500,
     },
     "ScoreboardPlayers": {
-        "tables": "ScoreboardPlayers=SP,Tournaments=T",
-        "join_on": "SP.OverviewPage=T.OverviewPage",
         "fields": (
-            "SP.OverviewPage,SP.Tournament,SP.Team,SP.TeamVs,SP.Link,SP.Name,SP.Champion,"
-            "SP.Kills,SP.Deaths,SP.Assists,SP.Gold,SP.CS,SP.DamageToChampions,SP.VisionScore,"
-            "SP.Role,SP.Side,SP.PlayerWin,SP.DateTime_UTC,SP.GameId,SP.MatchId"
+            "OverviewPage,Tournament,Team,TeamVs,Link,Name,Champion,"
+            "Kills,Deaths,Assists,Gold,CS,DamageToChampions,VisionScore,"
+            "Role,Side,PlayerWin,DateTime_UTC,GameId,MatchId"
         ),
-        "where": "T.League='La Ligue Française' OR T.League='La Ligue Française Division 2'",
+        # A LIKE pattern on OverviewPage avoids both problems:
+        # - the IN(71) filter that triggers aggressive rate limiting, and
+        # - the DateTime_UTC filter that misses LFL rows (regional leagues don't have
+        #   DateTime_UTC populated, so a date WHERE excludes them entirely).
+        # All LFL tournament OverviewPages start with 'LFL/', making this a reliable,
+        # single-condition filter that is cheap for the Cargo query planner.
+        "where": "OverviewPage LIKE 'LFL/%'",
+        "order_by": "GameId",
         "limit": 500,
     },
     "PicksAndBansS7": {

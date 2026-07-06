@@ -1,0 +1,19 @@
+# Template de connexion dbt pour BigQuery.
+#
+# Copier ce fichier dans ~/.dbt/profiles.yml et renseigner les valeurs,
+# ou exporter les variables d'environnement correspondantes.
+#
+# Authentification : Application Default Credentials (ADC)
+#   gcloud auth application-default login
+
+nexus_analytics:
+  target: dev
+  outputs:
+    dev:
+      type: bigquery
+      method: oauth
+      project: "{{ env_var('GCP_PROJECT_ID') }}"
+      dataset: gold
+      location: europe-west1
+      threads: 4
+      timeout_seconds: 300

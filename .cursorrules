@@ -1,0 +1,122 @@
+# ============================================================
+# NEXUS ANALYTICS — CURSOR RULES
+# Projet de certification RNCP37638 — Expert infrastructures data
+# ============================================================
+
+# ────────────────────────────────────────────────────────────
+# 1. LEAGUEPEDIA API — RÈGLES CRITIQUES (ban actif)
+# ────────────────────────────────────────────────────────────
+
+# Le compte spideybot est banni définitivement par Fandom.
+# Compte actif : InvaluableQuelea145@Botdev
+# Ne JAMAIS réintroduire spideybot dans le code.
+
+# Authentification :
+# TOUJOURS : credentials = AuthCredentials(username=settings.fandom_bot_name, password=settings.fandom_bot_password)
+# JAMAIS   : hardcoder des credentials
+
+# Pagination :
+# TOUJOURS : auto_continue=True via mwcleric
+# JAMAIS   : boucle manuelle avec offset croissant
+
+# Ordre des résultats :
+# TOUJOURS : order_by= sur toute requête paginée
+
+# Délais :
+# TOUJOURS : 2 secondes minimum entre requêtes consécutives
+# JAMAIS   : enchaîner plusieurs ingestions sans pause
+
+# ────────────────────────────────────────────────────────────
+# 2. ARCHITECTURE MEDALLION — RÈGLES ABSOLUES
+# ────────────────────────────────────────────────────────────
+
+# Bronze (ingestion/) :
+# - Données brutes, granularité atomique
+# - Métadonnées obligatoires : source, ingested_at, schema_version, md5
+# - JAMAIS d'agrégation ou de logique métier
+# - Format : NDJSON pour APIs, CSV brut pour Oracle's Elixir
+# - Chemin GCS : bronze/{source}/{table_or_year}/{date}.json
+
+# Silver (pipeline/silver_transforms/) :
+# - Lecture depuis Bronze uniquement
+# - Filtrage LFL, nettoyage, normalisation, dédoublonnage
+# - JAMAIS d'appel API externe
+
+# Gold (dbt/) :
+# - Agrégations via dbt Core uniquement
+# - Schéma en étoile : dim_ et fact_
+# - Tests dbt : not_null, unique, accepted_values, relationships
+# - JAMAIS de logique métier en Python
+
+# ────────────────────────────────────────────────────────────
+# 3. PYTHON — CONVENTIONS ET QUALITÉ
+# ────────────────────────────────────────────────────────────
+
+# TOUJOURS : pydantic-settings pour les variables d'environnement
+# JAMAIS   : os.getenv() dans le code métier
+
+# Une fonction = une responsabilité
+# Verbes de nommage : fetch_, load_, save_, validate_, build_, run_
+
+# Erreurs sur appels externes :
+#   1. logger.error()
+#   2. send_discord_notification()
+#   3. Ne pas crasher silencieusement
+
+# Tests :
+# - Appels externes TOUJOURS mockés
+# - Patch au chemin où la fonction EST UTILISÉE
+# - Une classe TestXxx par fonction, une méthode par scénario
+
+# ────────────────────────────────────────────────────────────
+# 4. GIT — WORKFLOW OBLIGATOIRE
+# ────────────────────────────────────────────────────────────
+
+# JAMAIS de commit direct sur main ou dev
+# Workflow : feature/xxx -> PR -> dev -> PR -> main
+# TOUJOURS vérifier git branch avant de commiter
+
+# Conventional Commits :
+# feat / fix / chore / refactor / test / docs / ci
+
+# JAMAIS de --no-verify sur pre-commit
+
+# ────────────────────────────────────────────────────────────
+# 5. CRITÈRES BC02 — CE QUE LE JURY ÉVALUE
+# ────────────────────────────────────────────────────────────
+
+# C8 — Sources obligatoires :
+#   API REST    : Leaguepedia Cargo API + Riot Games API
+#   Fichier     : Oracle's Elixir CSV (Google Drive)
+#   Scraping    : pages wiki Leaguepedia (SoloqueueId)
+#   BDD         : BigQuery (Gold)
+#   Big data    : GCS + BigQuery sur 10 ans de donnees LoL
+# Chaque script : CLI, init deps, logique, erreurs, sauvegarde
+
+# C9  : documenter filtres, jointures, optimisations dbt
+# C10 : documenter deps, commandes, logique de nettoyage
+# C11 : MERISE (MCD+MPD), registre RGPD, procedures de tri avec frequence
+# C12 : OpenAPI FastAPI, auth X-API-Key, tous endpoints documentes
+
+# ────────────────────────────────────────────────────────────
+# 6. INFRASTRUCTURE GCP
+# ────────────────────────────────────────────────────────────
+
+# Region : europe-west1 uniquement
+# Secrets : .env local / GitHub Secrets CI / Secret Manager prod
+# JAMAIS de secret hardcode dans le code ou Terraform
+# Toutes les ressources GCP dans terraform/
+# Lifecycle GCS : Bronze 90j Standard -> Coldline, Gold BQ 24 mois
+# IAM : moindre privilege, un compte de service par service
+
+# ────────────────────────────────────────────────────────────
+# 7. ACCESSIBILITE ET RGPD
+# ────────────────────────────────────────────────────────────
+
+# Docs : titres H1/H2/H3, texte alternatif, contrastes WCAG 2.1 AA
+# Discord : texte brut structure, emojis uniquement en indicateurs
+
+# Donnees personnelles :
+# - PUUIDs Riot : pseudonymises, base legale art. 6.1.f RGPD
+# - Riot IDs : donnees publiques de professionnels
+# - JAMAIS de donnees civiles (nom, email, adresse)
