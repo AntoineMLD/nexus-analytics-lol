@@ -598,6 +598,22 @@ Solution : le bucket existant a été créé en multi-région `EU`. GCS n'autori
 
 ---
 
+**Problème #18 — Bronze ScoreboardPlayers corrompu (données 2012 MLG)**
+
+Symptôme : `lfl_player_stats` Silver retournait `Filtered 26500 → 0 LFL player-game rows`. Le fichier `bronze/leaguepedia/ScoreboardPlayers/2026-06-04.json` contenait 26 500 lignes d'anciennes compétitions (MLG 2012, GPL 2014...) — aucune LFL.
+
+Cause racine : ce fichier Bronze a été ingéré AVANT que le `"where": "OverviewPage LIKE 'LFL/%'"` soit ajouté à `config.py`. L'ingestion globale non filtrée a récupéré les premières pages de `ScoreboardPlayers` depuis l'aube du jeu.
+
+Solution code : `filter_lfl_rows()` lève maintenant une `ValueError` explicite avec diagnostic (sample des OverviewPage trouvées + commande pour relancer l'ingestion) au lieu d'écrire silencieusement un Silver vide. Test unitaire ajouté (`test_raises_if_non_empty_input_all_filtered_out`).
+
+Action restante : relancer l'ingestion ScoreboardPlayers quand le throttle Fandom se lève (quelques heures) :
+```bash
+uv run python -m ingestion.leaguepedia.ingest --table ScoreboardPlayers
+uv run python -m pipeline.orchestration.run_pipeline --skip-ingest
+```
+
+---
+
 **Problème #17 — `run_pipeline.py --skip-ingest` échoue avec 404**
 
 Symptôme : en lançant `run_pipeline --skip-ingest`, les transforms Silver (`lfl_matches`, `lfl_player_stats`, `lfl_players`) échouaient avec `404 No such object: bronze/leaguepedia/Tournaments/2026-07-06.json`. Ces scripts ont `datetime.now().strftime("%Y-%m-%d")` comme date par défaut — ils cherchent le fichier Bronze du jour qui n'existe que le jour de l'ingestion.
