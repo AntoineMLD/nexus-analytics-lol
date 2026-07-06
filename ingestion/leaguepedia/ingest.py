@@ -79,8 +79,8 @@ def build_overview_page_filter(pages: set[str]) -> str:
 def build_esports_client() -> EsportsClient:
     """Build an authenticated EsportsClient using Fandom bot credentials from settings."""
     credentials = AuthCredentials(
-        username=settings.spideybot_fandom_name,
-        password=settings.spideybot_fandom_password,
+        username=settings.fandom_bot_name,
+        password=settings.fandom_bot_password,
     )
     return EsportsClient("lol", credentials=credentials)
 

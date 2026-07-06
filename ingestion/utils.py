@@ -18,8 +18,8 @@ class Settings(BaseSettings):
     api_key: str
     riot_api: str = ""
     discord_webhook_url: str = ""
-    spideybot_fandom_name: str = ""
-    spideybot_fandom_password: str = ""
+    fandom_bot_name: str = ""
+    fandom_bot_password: str = ""
 
 
 settings = Settings()
