@@ -6,7 +6,9 @@
 #   - Objets dans silver/ : pas de transition automatique (données actives).
 resource "google_storage_bucket" "main" {
   name                        = var.bucket_name
-  location                    = var.region
+  # Le bucket existant a été créé en multi-région EU.
+  # GCS n'autorise pas de changer la région d'un bucket existant.
+  location                    = "EU"
   storage_class               = "STANDARD"
   uniform_bucket_level_access = true
 
