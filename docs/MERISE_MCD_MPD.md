@@ -173,6 +173,62 @@ Implémentation concrète dans BigQuery (schéma en étoile, couche Gold dbt).
 | `gamelength_seconds` | INT64 | NULLABLE |
 | `team1_gold` / `team2_gold` | INT64 | NULLABLE |
 
+### Nouveaux modèles Gold (ajoutés en Phase 2)
+
+Les modèles suivants ont été ajoutés pour couvrir les analyses méta demandées par Nexus Analytics :
+
+#### `dim_champion` — Dimension champions
+
+| Colonne | Type BigQuery | Description |
+|---------|--------------|-------------|
+| `champion` | STRING (PK) | Nom du champion |
+| `total_games_played` | INT64 | Parties où le champion a été joué |
+| `total_picks` | INT64 | Nombre total de sélections |
+| `win_rate_pct` | FLOAT64 | Taux de victoire global (0-100) |
+| `avg_kills/deaths/assists` | FLOAT64 | Stats moyennes |
+| `picks_top/jungle/mid/bot/support` | INT64 | Sélections par rôle |
+| `first_played` / `last_played` | TIMESTAMP | Fenêtre temporelle LFL |
+
+#### `dim_patch` — Dimension patches
+
+| Colonne | Type BigQuery | Description |
+|---------|--------------|-------------|
+| `patch` | STRING (PK) | Version du jeu (ex: `14.5`) |
+| `total_games` | INT64 | Parties jouées sur ce patch |
+| `patch_start_date` / `patch_end_date` | TIMESTAMP | Fenêtre temporelle |
+| `tournaments_count` | INT64 | Nombre de tournois sur ce patch |
+
+#### `fact_draft` — Faits draft (picks et bans)
+
+Source Silver : `pipeline/silver_transforms/lfl_drafts.py` — unpivot de `PicksAndBansS7`
+(format large 20 colonnes → format long, une ligne par action).
+
+| Colonne | Type BigQuery | Description |
+|---------|--------------|-------------|
+| `game_id` | STRING (FK) | Référence vers `stg_lfl_matches` |
+| `team_name` | STRING | Équipe concernée |
+| `team_side` | INT64 | 1 (bleu) ou 2 (rouge) |
+| `action_type` | STRING | `pick` ou `ban` |
+| `action_order` | INT64 | Ordre dans la phase (1-5) |
+| `champion` | STRING | Champion sélectionné ou banni |
+| `team_won` | BOOL | L'équipe a gagné la partie ? |
+| `patch` | STRING | Via LEFT JOIN `stg_lfl_matches` |
+
+#### `fact_meta_trend` — Tendances méta par champion et patch
+
+Granularité : (champion, patch, overview_page). Utilisée par l'endpoint `GET /meta/trends`.
+
+| Colonne | Type BigQuery | Description |
+|---------|--------------|-------------|
+| `champion` | STRING | Nom du champion |
+| `patch` | STRING | Version du jeu |
+| `overview_page` | STRING | Tournoi / split |
+| `picks` | INT64 | Nombre de sélections |
+| `wins` | INT64 | Nombre de victoires |
+| `pick_rate_pct` | FLOAT64 | % du total de parties du tournoi+patch |
+| `win_rate_pct` | FLOAT64 | Taux de victoire sur ce patch |
+| `avg_kills/deaths/assists/damage` | FLOAT64 | Stats moyennes |
+
 ### Localisation et cycle de vie
 
 | Dataset | Région | Expiration tables |
