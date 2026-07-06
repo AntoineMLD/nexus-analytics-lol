@@ -412,17 +412,161 @@ gcloud auth application-default set-quota-project nexus-analytics-prod-498107
 
 ---
 
-## Prochaines étapes
+## Checklist exhaustive — Ce qui reste à faire
 
-1. **BigQuery loader** ✅ — Silver chargé dans `raw.lfl_matches`, `raw.lfl_player_stats`, `raw.lfl_players`
-2. **dbt Gold** ✅ — `fact_player_game`, `dim_player`, `dim_team` opérationnels dans BigQuery (`gold_gold`)
-3. **FastAPI** ✅ — 3 endpoints (`/players`, `/players/{id}`, `/matches`), auth X-API-Key, OpenAPI `/docs`
-4. **Terraform** ✅ — IaC complet : bucket GCS, datasets BQ, 2 SA + IAM — `terraform apply` exécuté avec succès
-5. **Documents certification** ← prochaine priorité
-   - MCD/MPD MERISE (C11)
-   - Registre RGPD (C11/C16)
-6. **Tests `lfl_players.py`** — module non couvert (❌)
-7. **Rapport BC02**
+> Mise à jour 2026-07-06 après audit complet de tous les documents projet (Brief commanditaire,
+> rapport BC01, grilles d'entretien, étude de faisabilité, planning prévisionnel, référentiel RNCP).
+>
+> Les divergences identifiées entre la documentation et le code réel sont signalées explicitement.
+
+---
+
+### P0 — Bloquants : code manquant promis dans les docs
+
+- [ ] **`dim_champion`** — dimension champions jouables.
+  - Source : champ `champion` dans `stg_lfl_player_stats`
+  - Contenu : champion_name, total_picks, total_bans, win_rate_pct, avg_kills, avg_cs par saison
+  - Fichier : `dbt/models/dimensions/dim_champion.sql`
+
+- [ ] **`dim_patch`** — historique des patches du jeu.
+  - Source : champ `patch` dans `stg_lfl_matches`
+  - Contenu : patch_version, first_game_date, last_game_date, total_games
+  - Fichier : `dbt/models/dimensions/dim_patch.sql`
+
+- [ ] **`fact_draft`** — une ligne par pick/ban par match.
+  - Source : table Bronze `PicksAndBansS7` (déjà ingérée, non transformée)
+  - Contenu : game_id, team, phase (pick/ban), champion, position, side
+  - Fichier : `pipeline/silver_transforms/lfl_drafts.py` (Silver) + `dbt/models/facts/fact_draft.sql`
+
+- [ ] **`fact_meta_trend`** — agrégation hebdomadaire pick/ban rates + winrates par champion et patch.
+  - Source : construit depuis `fact_player_game` + `fact_draft`
+  - Contenu : patch, champion, pick_rate, ban_rate, win_rate, total_games (filtrable par compétition)
+  - Fichier : `dbt/models/facts/fact_meta_trend.sql`
+
+- [ ] **Endpoints FastAPI analytiques** — ceux décrits dans le planning S10-S11 :
+  - `GET /meta/champion-stats?patch=14.5&competition=LFL` — pick/ban rates + winrate par champion
+  - `GET /teams/{team}/draft-history?season=LFL/2025` — historique draft d'une équipe adverse
+  - `GET /meta/top-compositions?team=Karmine+Corp&last_n_games=10` — top 5 compos jouées
+  - Fichier : `api/main.py` (nouveaux endpoints) + `api/database.py` (nouvelles requêtes BQ)
+
+- [ ] **Grilles d'entretien BC01 complétées** — les colonnes "Réponse / Notes" sont vides dans
+  `docs/docs_projet/Grilles d'entretien - analyse du besoin/BC01_grilles_entretien_nexus_analytics.docx`.
+  Les réponses fictives existent dans le fichier séparé mais ne sont pas intégrées dans les grilles.
+  À merger manuellement dans le .docx avant la soutenance E1.
+
+---
+
+### P1 — Important : cohérence doc/code et infrastructure
+
+- [ ] **Documenter la divergence Silver DuckDB→Python dans le rapport E4**.
+  Le rapport BC01 (p.8) et tous les docs techniques promettent `DuckDB + Parquet`.
+  Le code réel utilise `Python + NDJSON`. Deux choix :
+  - Option A : implémenter DuckDB+Parquet (migration complète, ~2 jours de travail)
+  - Option B : expliquer le changement architectural dans E4 — "initialement prévu avec DuckDB,
+    migré vers Python natif pour éviter une dépendance supplémentaire et simplifier les tests.
+    L'impact est minimal : les NDJSON GCS remplissent le même rôle de zone Silver normalisée."
+  Recommandation : **Option B** — plus rapide, honnête, démontre la capacité d'adaptation.
+
+- [ ] **Déploiement Cloud Run** — le planning et le rapport promettent FastAPI sur Cloud Run.
+  Actuellement : `uvicorn api.main:app --reload` en local uniquement.
+  À faire :
+  1. Ajouter `Dockerfile` à la racine du projet
+  2. Ajouter `google_cloud_run_service` dans `terraform/`
+  3. Déployer : `gcloud run deploy nexus-api --source . --region europe-west1`
+
+- [ ] **`dim_team_alias` (seeds dbt)** — mapping des noms d'équipes entre Oracle's Elixir et Leaguepedia.
+  Yasmine l'a explicitement signalé : "Team BDS Academy" vs "BDS Academy" vs "BDSA".
+  Fichier : `dbt/seeds/dim_team_alias.csv` + utilisation dans Silver transforms.
+
+- [ ] **Script d'orchestration `pipeline/orchestration/run_pipeline.py`** — enchaîne toutes les étapes
+  du pipeline dans l'ordre : ingest → silver → bq_loader → dbt run.
+  Mentionné dans le planning comme livrable de S14.
+
+- [ ] **Mise à jour `docs/MERISE_MCD_MPD.md`** avec les nouveaux modèles (dim_champion, dim_patch,
+  fact_draft, fact_meta_trend) une fois implémentés.
+
+- [ ] **`.env.example`** — référencé dans README mais absent du dépôt. À créer avec toutes les
+  variables sans valeurs (GCS_BUCKET_NAME, RIOT_API, etc.).
+
+---
+
+### P2 — Qualité et documentation
+
+- [ ] **Tests dbt métier** — règles de domaine dans `dbt/tests/` :
+  - `gamelength_seconds > 0` sur `fact_player_game`
+  - `kills >= 0`, `deaths >= 0` sur `fact_player_game`
+  - `win_rate_pct` entre 0 et 100 sur `dim_player`
+
+- [ ] **Tests unitaires nouveaux endpoints** — ajouter dans `tests/test_api.py` les tests pour
+  `/meta/champion-stats`, `/teams/{team}/draft-history`, `/meta/top-compositions`.
+
+- [ ] **Runbook opérationnel** — procédures de monitoring et de re-run :
+  - Que faire si Oracle's Elixir n'est pas disponible le lundi ?
+  - Comment corriger une ligne en quarantaine ?
+  - Comment mettre à jour `dim_team_alias` quand une équipe change de nom ?
+  Fichier : `docs/RUNBOOK.md`
+
+- [ ] **SCD Type 1 — justification formalisée** dans le rapport E4 ou `docs/MERISE_MCD_MPD.md`.
+
+- [ ] **Retour d'expérience pile technique** pour C14 — expliquer pourquoi BigQuery vs alternatives
+  (DuckDB en local, Snowflake, Redshift). Section dans rapport E4.
+
+---
+
+### P3 — Phase 2 : Dashboard (post-certification ou pour enrichir l'oral)
+
+Le rapport BC01 classe le dashboard en **Phase 2** (F7, score RICE 0,7).
+Thomas Bourgeois l'a identifié comme différenciant commercial.
+Yasmine a mentionné vouloir un outil de visualisation sans SQL.
+
+- [ ] **Looker Studio (Google Data Studio)** — outil gratuit natif BigQuery, sans code.
+  - Connecter BigQuery Gold (`gold_gold.fact_player_game`, `gold_gold.dim_player`)
+  - Page 1 : classement joueurs LFL (win rate, KDA moyen, par saison)
+  - Page 2 : tendances méta par patch (nécessite `fact_meta_trend`)
+  - Page 3 : profil adversaire — compos jouées, joueurs clés d'une équipe
+  - Partager le lien dans le README et dans le rapport E4
+
+- [ ] **Section "alerte méta"** — champion avec winrate anormal sur les 2 derniers patches.
+  Thomas Bourgeois l'a citée comme fonctionnalité différenciante. Peut être un endpoint FastAPI
+  (`GET /meta/alerts`) + une section Looker Studio.
+
+---
+
+### Rapport E4 (BC02) — Livrable principal à rédiger
+
+- [ ] **Rédiger le rapport professionnel BC02** (E4) basé sur `PROGRESS.md` comme ossature.
+  Structure recommandée :
+  1. Présentation du projet et contexte (Nexus Analytics, Brief commanditaire)
+  2. Architecture technique réalisée (Medallion, GCP, divergences par rapport aux specs)
+  3. Collecte et ingestion (C8 — 4 sources documentées)
+  4. Qualité et transformation des données (C9-C10 — Silver + dbt)
+  5. Entrepôt de données (C11-C15 — BigQuery, MERISE, RGPD)
+  6. API de mise à disposition (C12 — FastAPI)
+  7. Infrastructure (C14 — Terraform, IAM)
+  8. Problèmes rencontrés et solutions (les 16 problèmes du PROGRESS.md)
+  9. Bilan, limites, améliorations futures (dont Phase 2 Dashboard)
+
+---
+
+### Récapitulatif par priorité
+
+| Priorité | Tâche | Critère certif | Effort estimé |
+|---|---|---|---|
+| P0 | dim_champion + dim_patch | C13 | 2h |
+| P0 | fact_draft (Silver + dbt) | C13, C15 | 4h |
+| P0 | fact_meta_trend | C13 | 2h |
+| P0 | Endpoints analytiques FastAPI | C12 | 3h |
+| P0 | Grilles d'entretien remplies | E1 (BC01) | 1h |
+| P1 | Documenter divergence Silver | rapport E4 | 30min |
+| P1 | Déploiement Cloud Run | C12, C14 | 2h |
+| P1 | dim_team_alias seeds dbt | C10 | 1h |
+| P1 | Script orchestration | C8 | 1h |
+| P1 | .env.example | — | 15min |
+| P2 | Tests dbt métier | M1 DataOps | 1h |
+| P2 | Runbook opérationnel | C16 | 1h |
+| P3 | Dashboard Looker Studio | Phase 2 | 3h |
+| P3 | Alerte méta endpoint | Phase 2 | 1h |
+| — | **Rapport E4 complet** | BC02 entier | 2 jours |
 
 ---
 
