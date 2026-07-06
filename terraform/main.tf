@@ -1,4 +1,15 @@
+terraform {
+  required_version = ">= 1.5"
+
+  required_providers {
+    google = {
+      source  = "hashicorp/google"
+      version = "~> 5.0"
+    }
+  }
+}
+
 provider "google" {
-    project = "nexus-analytics-prod-498107"
-    region = "europe-west1"
+  project = var.project_id
+  region  = var.region
 }
