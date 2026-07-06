@@ -66,9 +66,26 @@ def get_lfl_overview_pages(tournaments: list[dict]) -> set[str]:
 
 
 def filter_lfl_rows(rows: list[dict], lfl_pages: set[str]) -> list[dict]:
-    """Keep only rows whose OverviewPage belongs to an LFL tournament."""
+    """Keep only rows whose OverviewPage belongs to an LFL tournament.
+
+    Raises ValueError if the input is non-empty but the filter returns 0 rows.
+    This guards against corrupted Bronze files (e.g. a global unfiltered ingestion
+    that has no LFL data), preventing a silent empty Silver write.
+    """
     filtered = [row for row in rows if row.get("OverviewPage") in lfl_pages]
     logger.info("Filtered %d → %d LFL player-game rows.", len(rows), len(filtered))
+
+    if rows and not filtered:
+        # Show a sample of OverviewPage values to help diagnose the root cause
+        sample_pages = list({r.get("OverviewPage") for r in rows[:20] if r.get("OverviewPage")})[:5]
+        raise ValueError(
+            f"Bronze ScoreboardPlayers has {len(rows)} rows but 0 match LFL OverviewPages. "
+            f"This file was likely ingested without the 'WHERE OverviewPage LIKE LFL/%' filter. "
+            f"Sample OverviewPage values found: {sample_pages}. "
+            f"Re-ingest ScoreboardPlayers with: "
+            f"uv run python -m ingestion.leaguepedia.ingest --table ScoreboardPlayers"
+        )
+
     return filtered
 
 
@@ -203,7 +220,14 @@ def run_transform(date: str, tournaments_date: str | None = None) -> None:
         return
 
     all_rows = load_bronze_table(bucket, "ScoreboardPlayers", date)
-    lfl_rows = filter_lfl_rows(all_rows, lfl_pages)
+    try:
+        lfl_rows = filter_lfl_rows(all_rows, lfl_pages)
+    except ValueError as exc:
+        msg = str(exc)
+        logger.error(msg)
+        send_discord_notification(f":x: {msg}")
+        return
+
     player_stats = transform_rows(lfl_rows)
     save_to_gcs(player_stats, bucket, date)
 

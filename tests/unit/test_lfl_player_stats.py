@@ -186,6 +186,17 @@ class TestFilterLflRows:
     def test_empty_rows_returns_empty(self):
         assert filter_lfl_rows([], {"LFL/2026/Spring"}) == []
 
+    def test_raises_if_non_empty_input_all_filtered_out(self):
+        """Bronze file ingested without LFL WHERE clause — must raise instead of silent empty write."""
+        corrupted_rows = [
+            {"OverviewPage": "2012 MLG Pro Circuit/Fall/Championship", "GameId": "g1"},
+            {"OverviewPage": "2014 GPL Spring", "GameId": "g2"},
+        ]
+        import pytest
+
+        with pytest.raises(ValueError, match="Re-ingest ScoreboardPlayers"):
+            filter_lfl_rows(corrupted_rows, {"LFL/2026/Spring"})
+
 
 # ---------------------------------------------------------------------------
 # run_transform (integration with mocked GCS)
