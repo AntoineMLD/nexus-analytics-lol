@@ -22,6 +22,7 @@ class Settings(BaseSettings):
     fandom_bot_password: str = ""
     gcp_project_id: str = ""
     bq_dataset_raw: str = "raw"
+    nexus_api_key: str = ""
 
 
 settings = Settings()
