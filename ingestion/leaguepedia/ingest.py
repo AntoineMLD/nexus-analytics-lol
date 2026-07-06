@@ -320,6 +320,7 @@ def run_ingestion(table_names: list[str] | None = None) -> bool:
                 tables=config.get("tables", table_name),
                 fields=config["fields"],
                 limit=config["limit"],
+                where=config.get("where", ""),
             )
 
         min_rows = config.get("min_rows", 1)

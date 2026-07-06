@@ -24,14 +24,14 @@ Sources externes
         ▼
 
 GCS Bronze   ──►   GCS Silver   ──►   BigQuery Gold   ──►   API FastAPI
-(données brutes)  (Python transforms) (dbt — planifié)   (planifiée)
+(données brutes)  (Python transforms)  (bq_loader + dbt)   (planifiée)
 ```
 
 | Couche | Rôle | Technologie | Statut |
 |--------|------|-------------|--------|
 | Bronze | Données brutes, sans transformation | Google Cloud Storage (NDJSON) | ✅ Implémenté |
 | Silver | Nettoyage, typage, filtrage LFL | Python → Google Cloud Storage | ✅ Implémenté |
-| Gold | Agrégats métier, modèles dimensionnels | BigQuery + dbt | 🔧 En cours |
+| Gold | Agrégats métier, modèles dimensionnels | BigQuery + dbt | ✅ Modèles écrits — BQ à provisionner |
 | API | Exposition des données Silver/Gold | FastAPI | 🔧 Planifiée |
 
 ---
@@ -50,16 +50,24 @@ pipeline/
     lfl_matches.py      # ScoreboardGames → silver/leaguepedia/lfl_matches/
     lfl_player_stats.py # ScoreboardPlayers → silver/leaguepedia/lfl_player_stats/
     lfl_players.py      # Players + TournamentRosters → silver/leaguepedia/lfl_players/
-  loaders/              # Chargement BigQuery (en cours)
-  orchestration/        # Orchestration des pipelines (en cours)
+  loaders/
+    bq_loader.py        # GCS Silver → BigQuery raw (CLI, WRITE_TRUNCATE)
+  orchestration/        # Orchestration des pipelines (planifié)
 
 dbt/
-  models/               # Modèles Gold dimensionnels (en cours)
+  dbt_project.yml       # Config dbt (staging=view, gold=table)
+  profiles.yml          # Template connexion BigQuery (ADC oauth)
+  models/
+    staging/            # stg_lfl_matches.sql, stg_lfl_player_stats.sql
+    dimensions/         # dim_team.sql, dim_player.sql
+    facts/              # fact_player_game.sql (KDA ratio calculé)
 
 api/                    # API FastAPI (planifiée)
-terraform/              # Infrastructure GCP as code (en cours)
+terraform/              # Infrastructure GCP as code (planifié)
 tests/
   unit/                 # 129 tests unitaires, offline, sans credentials
+docs/
+  MAPPING_CERTIFICATION.md  # Mapping complet critères RNCP ↔ code
 scripts/
   debug/                # Scripts d'exploration ad hoc (hors pipeline)
 ```
@@ -90,6 +98,7 @@ GCS_BUCKET_NAME=<nom du bucket GCS>
 RIOT_API=<clé Riot Games API>
 FANDOM_BOT_NAME=<compte@BotName>
 FANDOM_BOT_PASSWORD=<mot de passe bot Fandom>
+GCP_PROJECT_ID=<ID du projet GCP — pour BigQuery>
 DISCORD_WEBHOOK_URL=<webhook Discord — optionnel>
 API_KEY=<clé Google Drive>
 ```
@@ -138,6 +147,29 @@ uv run python -m pipeline.silver_transforms.lfl_players --date 2026-06-04
 
 ---
 
+## Charger en Gold (BigQuery + dbt)
+
+```bash
+# 1. Charger une table Silver dans BigQuery (dataset raw)
+uv run python -m pipeline.loaders.bq_loader \
+  --source leaguepedia --table lfl_matches --date 2026-06-07
+
+uv run python -m pipeline.loaders.bq_loader \
+  --source leaguepedia --table lfl_player_stats --date 2026-07-06
+
+uv run python -m pipeline.loaders.bq_loader \
+  --source leaguepedia --table lfl_players --date 2026-06-04
+
+# 2. Copier dbt/profiles.yml dans ~/.dbt/profiles.yml et renseigner GCP_PROJECT_ID
+# 3. Depuis le dossier dbt/
+cd dbt
+dbt run        # Exécuter les modèles staging → dimensions → facts
+dbt test       # Lancer les tests not_null, unique, relationships
+dbt docs serve # Générer et ouvrir la documentation
+```
+
+---
+
 ## Tests
 
 ```bash
@@ -159,10 +191,10 @@ Les tests unitaires tournent **sans credentials ni accès réseau** — tous les
 | Langage | Python 3.11 |
 | Gestion des dépendances | uv |
 | Stockage (Bronze + Silver) | Google Cloud Storage |
-| Entrepôt de données (Gold) | BigQuery — en cours |
-| Transformations (Gold) | dbt — en cours |
+| Entrepôt de données (Gold) | BigQuery |
+| Transformations (Gold) | dbt (5 modèles : staging, dim, facts) |
 | API | FastAPI — planifiée |
-| Infrastructure | Terraform — en cours |
+| Infrastructure | Terraform — planifié |
 | Config / secrets | pydantic-settings + .env |
 | Linting | Ruff |
 | Tests | pytest + unittest.mock |

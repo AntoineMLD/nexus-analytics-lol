@@ -35,11 +35,14 @@ TABLE_CONFIGS: dict[str, dict] = {
             "Kills,Deaths,Assists,Gold,CS,DamageToChampions,VisionScore,"
             "Role,Side,PlayerWin,DateTime_UTC,GameId,MatchId"
         ),
-        # No lfl_filter: ingested globally (Bronze = raw).
-        # The WHERE IN (...) approach with 71 OverviewPages triggers an immediate
-        # rate limit on lol.fandom.com regardless of account. LFL filtering is
-        # handled downstream in the Silver transform (lfl_player_stats.py).
-        "order_by": "DateTime_UTC",
+        # A LIKE pattern on OverviewPage avoids both problems:
+        # - the IN(71) filter that triggers aggressive rate limiting, and
+        # - the DateTime_UTC filter that misses LFL rows (regional leagues don't have
+        #   DateTime_UTC populated, so a date WHERE excludes them entirely).
+        # All LFL tournament OverviewPages start with 'LFL/', making this a reliable,
+        # single-condition filter that is cheap for the Cargo query planner.
+        "where": "OverviewPage LIKE 'LFL/%'",
+        "order_by": "GameId",
         "limit": 500,
     },
     "PicksAndBansS7": {

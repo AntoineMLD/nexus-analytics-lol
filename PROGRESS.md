@@ -69,8 +69,8 @@ uv run python -m ingestion.oracle_elixir.ingest --year 2026  # réingestion ann�
 
 | Table | Filtre | Rows |
 |---|---|---|
-| `ScoreboardGames` | LFL D1 + D2 via OverviewPage IN | **3 053** ✅ |
-| `ScoreboardPlayers` | LFL D1 + D2 via OverviewPage IN | **16 000** ⚠️ partiel (~53%) |
+| `ScoreboardGames` | LFL D1 + D2 via `OverviewPage IN (...)` | **3 053** ✅ |
+| `ScoreboardPlayers` | `OverviewPage LIKE 'LFL/%'` | **30 530** ✅ |
 | `PicksAndBansS7` | aucun | — |
 | `Tournaments` | aucun | 10 288 |
 | `Teams` | aucun | — |
@@ -82,7 +82,8 @@ uv run python -m ingestion.oracle_elixir.ingest --year 2026  # réingestion ann�
 **Dates d'ingestion actuelles :**
 - La plupart : `2026-06-04`
 - `Players` : `2026-06-05`
-- `ScoreboardGames` réingéré correctement : `2026-06-07` → **3 053 rows**
+- `ScoreboardGames` : `2026-06-07` → **3 053 rows** ✅
+- `ScoreboardPlayers` : `2026-06-05` → **30 530 rows** ✅ (voir problème n°14)
 
 **Commande :**
 ```bash
@@ -111,9 +112,7 @@ uv run python -m ingestion.riot_api.ingest --silver-date 2026-06-04
 
 ---
 
-## Silver transforms ⚠️ partiellement complet
-
-> **À FAIRE AVANT DE CONTINUER** : `lfl_player_stats` Silver est basé sur un Bronze ScoreboardPlayers incomplet (16 000 / ~30 000 lignes). Réingérer `ScoreboardPlayers` le lendemain du rate limit (voir Prochaines étapes), puis relancer `lfl_player_stats`. Ne pas charger ce Silver en BigQuery tant qu'il est incomplet.
+## Silver transforms ✅ complet
 
 ### `lfl_players` — `pipeline/silver_transforms/lfl_players.py`
 
