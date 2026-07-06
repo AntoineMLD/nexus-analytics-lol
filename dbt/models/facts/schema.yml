@@ -1,0 +1,29 @@
+version: 2
+
+models:
+  - name: fact_player_game
+    description: >
+      Table de faits principale : une ligne par joueur par partie LFL.
+      Enrichit les stats individuelles avec les informations du match
+      (durée, patch, équipes) et calcule le KDA ratio.
+    columns:
+      - name: game_id
+        description: "Clé étrangère vers stg_lfl_matches."
+        tests:
+          - not_null
+          - relationships:
+              to: ref('stg_lfl_matches')
+              field: game_id
+      - name: player_link
+        description: "Clé étrangère vers dim_player."
+        tests:
+          - not_null
+          - relationships:
+              to: ref('dim_player')
+              field: player_id
+      - name: player_win
+        description: "True si le joueur a gagné cette partie."
+      - name: kda_ratio
+        description: "(kills + assists) / max(deaths, 1) — arrondi à 2 décimales."
+      - name: gamelength_seconds
+        description: "Durée de la partie en secondes (issu du match)."

@@ -1,0 +1,66 @@
+version: 2
+
+sources:
+  - name: raw
+    description: "Tables brutes chargées depuis GCS Silver par pipeline/loaders/bq_loader.py."
+    database: "{{ env_var('GCP_PROJECT_ID') }}"
+    schema: raw
+    tables:
+      - name: lfl_matches
+        description: "Matchs LFL normalisés (ScoreboardGames Silver)."
+      - name: lfl_player_stats
+        description: "Stats joueurs LFL normalisées (ScoreboardPlayers Silver)."
+      - name: lfl_players
+        description: "Joueurs LFL avec leurs comptes EUW Soloqueue."
+
+models:
+  - name: stg_lfl_matches
+    description: "Vue staging sur lfl_matches : sélection des colonnes et cast datetime."
+    columns:
+      - name: game_id
+        description: "Identifiant unique de la partie (clé primaire)."
+        tests:
+          - not_null
+          - unique
+      - name: match_id
+        description: "Identifiant du match (une série de parties)."
+        tests:
+          - not_null
+      - name: datetime_utc
+        tests:
+          - not_null
+      - name: team1
+        tests:
+          - not_null
+      - name: team2
+        tests:
+          - not_null
+      - name: win_team
+        tests:
+          - not_null
+
+  - name: stg_lfl_player_stats
+    description: "Vue staging sur lfl_player_stats : une ligne par joueur par partie."
+    columns:
+      - name: game_id
+        description: "Référence à stg_lfl_matches.game_id."
+        tests:
+          - not_null
+          - relationships:
+              to: ref('stg_lfl_matches')
+              field: game_id
+      - name: player_link
+        description: "Identifiant wiki du joueur (clé dans dim_player)."
+        tests:
+          - not_null
+      - name: team
+        tests:
+          - not_null
+      - name: champion
+        tests:
+          - not_null
+      - name: role
+        tests:
+          - not_null
+          - accepted_values:
+              values: ["Top", "Jungle", "Mid", "Bot", "Support"]

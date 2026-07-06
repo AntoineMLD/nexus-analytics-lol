@@ -1,0 +1,31 @@
+version: 2
+
+models:
+  - name: dim_team
+    description: "Dimension équipes : liste dédupliquée avec stats de présence."
+    columns:
+      - name: team_name
+        description: "Nom de l'équipe (clé primaire)."
+        tests:
+          - not_null
+          - unique
+      - name: total_games
+        tests:
+          - not_null
+
+  - name: dim_player
+    description: "Dimension joueurs : un joueur unique avec ses statistiques agrégées."
+    columns:
+      - name: player_id
+        description: "player_link wiki (clé primaire)."
+        tests:
+          - not_null
+          - unique
+      - name: player_name
+        tests:
+          - not_null
+      - name: total_games
+        tests:
+          - not_null
+      - name: win_rate_pct
+        description: "Taux de victoire en pourcentage (0-100)."

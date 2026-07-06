@@ -20,6 +20,8 @@ class Settings(BaseSettings):
     discord_webhook_url: str = ""
     fandom_bot_name: str = ""
     fandom_bot_password: str = ""
+    gcp_project_id: str = ""
+    bq_dataset_raw: str = "raw"
 
 
 settings = Settings()
