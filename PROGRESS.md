@@ -423,31 +423,28 @@ gcloud auth application-default set-quota-project nexus-analytics-prod-498107
 
 ### P0 — Bloquants : code manquant promis dans les docs
 
-- [ ] **`dim_champion`** — dimension champions jouables.
+- [x] **`dim_champion`** — dimension champions jouables. ✅ 2026-07-06
   - Source : champ `champion` dans `stg_lfl_player_stats`
-  - Contenu : champion_name, total_picks, total_bans, win_rate_pct, avg_kills, avg_cs par saison
   - Fichier : `dbt/models/dimensions/dim_champion.sql`
 
-- [ ] **`dim_patch`** — historique des patches du jeu.
+- [x] **`dim_patch`** — historique des patches du jeu. ✅ 2026-07-06
   - Source : champ `patch` dans `stg_lfl_matches`
-  - Contenu : patch_version, first_game_date, last_game_date, total_games
   - Fichier : `dbt/models/dimensions/dim_patch.sql`
 
-- [ ] **`fact_draft`** — une ligne par pick/ban par match.
-  - Source : table Bronze `PicksAndBansS7` (déjà ingérée, non transformée)
-  - Contenu : game_id, team, phase (pick/ban), champion, position, side
-  - Fichier : `pipeline/silver_transforms/lfl_drafts.py` (Silver) + `dbt/models/facts/fact_draft.sql`
+- [x] **`fact_draft`** — une ligne par pick/ban par match. ✅ 2026-07-06
+  - Silver : `pipeline/silver_transforms/lfl_drafts.py` — unpivot PicksAndBansS7 → long format
+  - dbt : `dbt/models/facts/fact_draft.sql` + `dbt/models/staging/stg_lfl_drafts.sql`
+  - 31 tests unitaires dans `tests/test_lfl_drafts.py`
 
-- [ ] **`fact_meta_trend`** — agrégation hebdomadaire pick/ban rates + winrates par champion et patch.
-  - Source : construit depuis `fact_player_game` + `fact_draft`
-  - Contenu : patch, champion, pick_rate, ban_rate, win_rate, total_games (filtrable par compétition)
+- [x] **`fact_meta_trend`** — pick/ban rates + winrates par champion et patch. ✅ 2026-07-06
+  - Source : `stg_lfl_player_stats` JOIN `stg_lfl_matches` (patch uniquement dans matches)
   - Fichier : `dbt/models/facts/fact_meta_trend.sql`
 
-- [ ] **Endpoints FastAPI analytiques** — ceux décrits dans le planning S10-S11 :
-  - `GET /meta/champion-stats?patch=14.5&competition=LFL` — pick/ban rates + winrate par champion
-  - `GET /teams/{team}/draft-history?season=LFL/2025` — historique draft d'une équipe adverse
-  - `GET /meta/top-compositions?team=Karmine+Corp&last_n_games=10` — top 5 compos jouées
-  - Fichier : `api/main.py` (nouveaux endpoints) + `api/database.py` (nouvelles requêtes BQ)
+- [x] **Endpoints FastAPI analytiques** ✅ 2026-07-06
+  - `GET /meta/champion-stats` — stats dim_champion (win_rate, picks par rôle, KDA)
+  - `GET /teams/{team}/draft-history` — fact_draft filtré par équipe, patch, type (pick/ban)
+  - `GET /meta/trends` — fact_meta_trend filtré par patch et tournoi
+  - 12 nouveaux tests dans `tests/test_api.py` → 27 tests API total
 
 - [ ] **Grilles d'entretien BC01 complétées** — les colonnes "Réponse / Notes" sont vides dans
   `docs/docs_projet/Grilles d'entretien - analyse du besoin/BC01_grilles_entretien_nexus_analytics.docx`.
@@ -483,10 +480,9 @@ gcloud auth application-default set-quota-project nexus-analytics-prod-498107
   Mentionné dans le planning comme livrable de S14.
 
 - [ ] **Mise à jour `docs/MERISE_MCD_MPD.md`** avec les nouveaux modèles (dim_champion, dim_patch,
-  fact_draft, fact_meta_trend) une fois implémentés.
+  fact_draft, fact_meta_trend) — implémentés, à documenter dans le schéma MPD.
 
-- [ ] **`.env.example`** — référencé dans README mais absent du dépôt. À créer avec toutes les
-  variables sans valeurs (GCS_BUCKET_NAME, RIOT_API, etc.).
+- [x] **`.env.example`** — créé avec toutes les variables commentées. ✅ 2026-07-06
 
 ---
 

@@ -42,6 +42,43 @@ MATCH_ROW = {
     "n_game_in_match": 1,
 }
 
+CHAMPION_ROW = {
+    "champion": "Yone",
+    "total_games_played": 87,
+    "total_picks": 90,
+    "win_rate_pct": 52.3,
+    "avg_kills": 4.2,
+    "avg_deaths": 2.1,
+    "avg_assists": 5.0,
+    "picks_top": 60,
+    "picks_jungle": 0,
+    "picks_mid": 27,
+    "picks_bot": 0,
+    "picks_support": 0,
+}
+
+DRAFT_ACTION_ROW = {
+    "game_id": "LFLSP2025-1234",
+    "overview_page": "LFL/2025 Season/Spring Split",
+    "datetime_utc": "2025-03-01T15:00:00",
+    "patch": "14.5",
+    "team_side": 1,
+    "action_type": "ban",
+    "action_order": 1,
+    "champion": "Yone",
+    "team_won": True,
+}
+
+META_TREND_ROW = {
+    "overview_page": "LFL/2025 Season/Spring Split",
+    "patch": "14.5",
+    "champion": "Yone",
+    "picks": 12,
+    "wins": 7,
+    "pick_rate_pct": 40.0,
+    "win_rate_pct": 58.3,
+}
+
 
 @pytest.fixture
 def client(monkeypatch):
@@ -165,3 +202,101 @@ class TestListMatches:
     def test_limit_above_200_rejected(self, client):
         response = client.get("/matches?limit=999", headers=HEADERS)
         assert response.status_code == 422
+
+
+# ─── GET /meta/champion-stats ─────────────────────────────────────────────────
+
+
+class TestListChampionStats:
+    def test_returns_champion_list(self, client):
+        with patch("api.main.query_champion_stats", return_value=[CHAMPION_ROW]):
+            response = client.get("/meta/champion-stats", headers=HEADERS)
+        assert response.status_code == 200
+        data = response.json()
+        assert len(data) == 1
+        assert data[0]["champion"] == "Yone"
+        assert data[0]["total_games_played"] == 87
+        assert data[0]["win_rate_pct"] == 52.3
+
+    def test_empty_list_is_valid(self, client):
+        with patch("api.main.query_champion_stats", return_value=[]):
+            response = client.get("/meta/champion-stats", headers=HEADERS)
+        assert response.status_code == 200
+        assert response.json() == []
+
+    def test_params_forwarded(self, client):
+        mock_fn = MagicMock(return_value=[])
+        with patch("api.main.query_champion_stats", mock_fn):
+            client.get("/meta/champion-stats?min_games=10&limit=20&offset=5", headers=HEADERS)
+        mock_fn.assert_called_once_with(min_games=10, limit=20, offset=5)
+
+    def test_requires_auth(self, client):
+        response = client.get("/meta/champion-stats")
+        assert response.status_code == 401
+
+
+# ─── GET /teams/{team}/draft-history ─────────────────────────────────────────
+
+
+class TestGetTeamDraftHistory:
+    def test_returns_draft_actions(self, client):
+        with patch("api.main.query_team_draft_history", return_value=[DRAFT_ACTION_ROW]):
+            response = client.get("/teams/Karmine%20Corp/draft-history", headers=HEADERS)
+        assert response.status_code == 200
+        data = response.json()
+        assert len(data) == 1
+        assert data[0]["champion"] == "Yone"
+        assert data[0]["action_type"] == "ban"
+        assert data[0]["team_won"] is True
+
+    def test_empty_list_is_valid(self, client):
+        with patch("api.main.query_team_draft_history", return_value=[]):
+            response = client.get("/teams/Karmine%20Corp/draft-history", headers=HEADERS)
+        assert response.status_code == 200
+        assert response.json() == []
+
+    def test_filters_forwarded(self, client):
+        mock_fn = MagicMock(return_value=[])
+        with patch("api.main.query_team_draft_history", mock_fn):
+            client.get(
+                "/teams/Karmine%20Corp/draft-history?patch=14.5&action_type=ban",
+                headers=HEADERS,
+            )
+        mock_fn.assert_called_once_with(
+            team="Karmine Corp", patch="14.5", action_type="ban", limit=100, offset=0
+        )
+
+    def test_requires_auth(self, client):
+        response = client.get("/teams/Karmine%20Corp/draft-history")
+        assert response.status_code == 401
+
+
+# ─── GET /meta/trends ────────────────────────────────────────────────────────
+
+
+class TestListMetaTrends:
+    def test_returns_trends(self, client):
+        with patch("api.main.query_meta_trends", return_value=[META_TREND_ROW]):
+            response = client.get("/meta/trends", headers=HEADERS)
+        assert response.status_code == 200
+        data = response.json()
+        assert len(data) == 1
+        assert data[0]["champion"] == "Yone"
+        assert data[0]["pick_rate_pct"] == 40.0
+        assert data[0]["win_rate_pct"] == 58.3
+
+    def test_empty_list_is_valid(self, client):
+        with patch("api.main.query_meta_trends", return_value=[]):
+            response = client.get("/meta/trends", headers=HEADERS)
+        assert response.status_code == 200
+        assert response.json() == []
+
+    def test_patch_filter_forwarded(self, client):
+        mock_fn = MagicMock(return_value=[])
+        with patch("api.main.query_meta_trends", mock_fn):
+            client.get("/meta/trends?patch=14.5&limit=30", headers=HEADERS)
+        mock_fn.assert_called_once_with(patch="14.5", overview_page=None, limit=30, offset=0)
+
+    def test_requires_auth(self, client):
+        response = client.get("/meta/trends")
+        assert response.status_code == 401
