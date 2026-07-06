@@ -478,6 +478,7 @@ gcloud auth application-default set-quota-project nexus-analytics-prod-498107
 - [x] **Script d'orchestration `pipeline/orchestration/run_pipeline.py`** — ✅ 2026-07-06
   Enchaîne ingest → silver → bq_loader → dbt run. Pas de cron configuré — lancement manuel.
   Flags : `--skip-ingest`, `--dbt-only`, `--date YYYY-MM-DD`.
+  Fix #17 : auto-détection de la dernière date Bronze via listing GCS (évite le 404 "fichier du jour introuvable").
 
 - [x] **Mise à jour `docs/MERISE_MCD_MPD.md`** — dim_champion, dim_patch, fact_draft, fact_meta_trend documentés. ✅ 2026-07-06
 
@@ -597,6 +598,16 @@ Solution : le bucket existant a été créé en multi-région `EU`. GCS n'autori
 
 ---
 
+**Problème #17 — `run_pipeline.py --skip-ingest` échoue avec 404**
+
+Symptôme : en lançant `run_pipeline --skip-ingest`, les transforms Silver (`lfl_matches`, `lfl_player_stats`, `lfl_players`) échouaient avec `404 No such object: bronze/leaguepedia/Tournaments/2026-07-06.json`. Ces scripts ont `datetime.now().strftime("%Y-%m-%d")` comme date par défaut — ils cherchent le fichier Bronze du jour qui n'existe que le jour de l'ingestion.
+
+Solution : ajout de `find_latest_bronze_date()` dans `run_pipeline.py` — liste le préfixe `bronze/leaguepedia/Tournaments/` en GCS et retourne la date du fichier le plus récent (`2026-06-04`). Cette date est résolue une seule fois avant de lancer les transforms et passée via `--date` à tous les sous-processus.
+
+Enseignement : les scripts individuels ont une valeur par défaut "aujourd'hui" raisonnable pour un usage isolé, mais l'orchestration doit résoudre la date une seule fois depuis la source de vérité (GCS).
+
+---
+
 ## Couverture de tests
 
 | Module | Tests | État |
@@ -604,12 +615,14 @@ Solution : le bucket existant a été créé en multi-région `EU`. GCS n'autori
 | `ingestion/oracle_elixir/ingest.py` | `test_oracle_elixir.py` | ✅ 25 tests |
 | `ingestion/leaguepedia/ingest.py` | `test_leaguepedia.py` | ✅ 10 tests |
 | `ingestion/riot_api/ingest.py` | `test_riot_api.py` | ✅ 21 tests |
+| `ingestion/leaguepedia_wiki/ingest.py` | `test_leaguepedia_wiki.py` | ✅ 25 tests |
 | `pipeline/silver_transforms/lfl_matches.py` | `test_lfl_matches.py` | ✅ 31 tests |
 | `pipeline/silver_transforms/lfl_player_stats.py` | `test_lfl_player_stats.py` | ✅ 25 tests |
-| `pipeline/silver_transforms/lfl_players.py` | — | ❌ non couvert |
-| `api/` (FastAPI endpoints) | `test_api.py` | ✅ 15 tests |
+| `pipeline/silver_transforms/lfl_players.py` | `test_lfl_players.py` | ✅ 49 tests |
+| `pipeline/silver_transforms/lfl_drafts.py` | `test_lfl_drafts.py` | ✅ 31 tests |
+| `api/` (FastAPI endpoints) | `test_api.py` | ✅ 27 tests |
 
-**Total : 129 tests unitaires**
+**Total : 261 tests unitaires (100% de couverture des modules Python)**
 
 ---
 
