@@ -46,13 +46,17 @@ def fetch_seasons() -> list[str]:
 
 @st.cache_data(ttl=600, show_spinner=False)
 def fetch_players(min_games: int = 5, season: str | None = None) -> pd.DataFrame:
-    """Joueurs LFL avec stats agrégées et équipe actuelle — filtrables par saison."""
+    """Joueurs LFL avec stats agrégées, équipe actuelle et historique d'équipes."""
     if season:
         sql = f"""
             SELECT
                 ps.player_link                                                          AS player_id,
                 ps.player_name,
                 t.current_team,
+                t.total_games_in_team,
+                t.last_game_date,
+                ARRAY_LENGTH(t.all_teams_played)                                        AS teams_count,
+                ARRAY_TO_STRING(t.all_teams_played, ' → ')                             AS teams_history,
                 COUNT(DISTINCT ps.game_id)                                              AS total_games,
                 ROUND(COUNTIF(ps.player_win) * 100.0 / COUNT(*), 1)                    AS win_rate_pct,
                 ROUND(AVG(ps.kills), 2)                                                 AS avg_kills,
@@ -67,7 +71,10 @@ def fetch_players(min_games: int = 5, season: str | None = None) -> pd.DataFrame
             LEFT JOIN {_table(DATASET_GOLD, "dim_player_current_team")} t
               ON ps.player_link = t.player_id
             WHERE STARTS_WITH(m.overview_page, '{season}')
-            GROUP BY ps.player_link, ps.player_name, t.current_team
+            GROUP BY
+                ps.player_link, ps.player_name,
+                t.current_team, t.total_games_in_team, t.last_game_date,
+                t.all_teams_played
             HAVING COUNT(DISTINCT ps.game_id) >= {min_games}
             ORDER BY total_games DESC
             LIMIT 200
@@ -78,6 +85,10 @@ def fetch_players(min_games: int = 5, season: str | None = None) -> pd.DataFrame
                 p.player_id,
                 p.player_name,
                 t.current_team,
+                t.total_games_in_team,
+                t.last_game_date,
+                ARRAY_LENGTH(t.all_teams_played)                                        AS teams_count,
+                ARRAY_TO_STRING(t.all_teams_played, ' → ')                             AS teams_history,
                 p.total_games,
                 p.win_rate_pct,
                 p.avg_kills,
