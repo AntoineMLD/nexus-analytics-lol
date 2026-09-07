@@ -12,9 +12,9 @@
 | Bloc | Évaluation | Statut global | Commentaire |
 |------|-----------|---------------|-------------|
 | **BC01** C1-C7 — Piloter un projet data | E1, E2, E3 | ✅ **Terminé** | Documents produits et livrés |
-| **BC02** C8-C12 — Collecte, stockage, mise à disposition | E4 | 🟡 **Partiel (~65%)** | Code solide, scraping + FastAPI + MERISE manquants |
-| **BC03** C13-C17 — Entrepôt de données | E5, E6 | 🟡 **Partiel (~55%)** | dbt en place, SCD + registre RGPD manquants |
-| **BC04** C18-C21 — Data lake | E7 | 🔴 **Absent (~15%)** | GCS = data lake de fait, mais non formalisé |
+| **BC02** C8-C12 — Collecte, stockage, mise à disposition | E4 | 🟡 **Partiel (~75%)** | Code solide, scraping ✅, FastAPI ✅, dashboard ✅, MERISE ✅, RGPD ✅ |
+| **BC03** C13-C17 — Entrepôt de données | E5, E6 | 🟡 **Partiel (~70%)** | dbt 11 modèles ✅, SCD2 ✅, dim_player_current_team ✅ |
+| **BC04** C18-C21 — Data lake | E7 | 🟡 **Partiel (~40%)** | GCS Medallion documenté ✅, streaming et catalogue absents |
 
 ---
 
@@ -222,13 +222,9 @@ BC03 est couvert partiellement par notre Gold (BigQuery + dbt). Il est évalué 
 
 | Élément | Ce qu'on a | Statut |
 |---------|-----------|--------|
-| SCD Type 1 (écrasement) | WRITE_TRUNCATE sur bq_loader | ✅ (implicite) |
-| SCD Type 2 (historisation) | Absent — pas de colonne `valid_from`/`valid_to` | ❌ |
-| SCD Type 3 (ajout colonne) | Absent | ❌ |
-| Documentation des choix SCD | Absent | ❌ |
-
-> **Note :** pour un projet sportif où les "dimensions" (joueurs, équipes) changent peu,
-> SCD Type 1 (écrasement) est défendable. Il faut le justifier dans le rapport.
+| SCD Type 1 (écrasement) | WRITE_TRUNCATE sur bq_loader | ✅ |
+| SCD Type 2 (historisation) | `dim_player_current_team.sql` + snapshot dbt `snap_player_team` (valid_from/valid_to) | ✅ 2026-09-07 |
+| Documentation des choix SCD | `docs/MERISE_MCD_MPD.md` section SCD | ✅ |
 
 ---
 
@@ -250,36 +246,38 @@ mais non formalisé comme tel.
 
 ## Résumé des manquants par priorité
 
-### 🔴 Bloquants (sans ça, un critère entier n'est pas validable)
+> Mise à jour : 2026-09-07 — dashboard ✅, SCD2 ✅, EMEA Masters ✅, bq_loader documenté ✅
+
+### 🔴 Bloquants résolus ✅
+
+| # | Élément | Critère | Statut |
+|---|---------|---------|--------|
+| 1 | **Module scraping** `ingestion/leaguepedia_wiki/ingest.py` | C8 | ✅ |
+| 2 | **FastAPI** endpoints + auth X-API-Key + OpenAPI | C12 | ✅ |
+| 3 | **MCD/MPD MERISE** `docs/MERISE_MCD_MPD.md` | C11, C13 | ✅ |
+| 4 | **Registre RGPD** `docs/RGPD_registre.md` | C11, C16 | ✅ |
+
+### 🟡 Restants importants
 
 | # | Manque | Critère | Effort estimé |
 |---|--------|---------|---------------|
-| 1 | **Module scraping** : industrialiser `debug_wiki_pages.py` → `ingestion/leaguepedia_wiki/ingest.py` avec CLI, save Bronze, tests | C8 | 4-6h |
-| 2 | **FastAPI** : 2-3 endpoints (`/players`, `/matches`, `/stats`) + auth `X-API-Key` + doc OpenAPI | C12 | 6-8h |
-| 3 | **MCD/MPD MERISE** : diagramme entités-relations des tables Gold + script SQL de création | C11, C13 | 3-4h |
-| 4 | **Registre RGPD** : formaliser le traitement des PUUIDs (finalité, base légale, durée, suppression) | C11, C16 | 2-3h |
-
-### 🟡 Importants (partiels, à compléter pour convaincre le jury)
-
-| # | Manque | Critère | Effort estimé |
-|---|--------|---------|---------------|
-| 5 | **Terraform** : compléter `main.tf` avec bucket + BQ dataset + IAM + lifecycle (Bronze 90j → Coldline) | C14, C19 | 3-4h |
-| 6 | **Commentaires SQL** dans les modèles dbt : expliquer les choix de jointure, SAFE_DIVIDE, etc. | C9 | 1h |
-| 7 | **Documentation BQ** : ajouter dans le README une section "Gold — BigQuery" avec procédure d'installation dbt | C14 | 1h |
-| 8 | **Tests métier dbt** : ajouter des tests `dbt_utils` ou SQL custom (ex: `gamelength_seconds > 0`, `kills >= 0`) | M1 DataOps | 2h |
-| 9 | **Justification SCD** : documenter pourquoi SCD Type 1 est choisi pour ce cas d'usage | C17 | 30min |
+| 5 | **Terraform** lifecycle Bronze → Coldline 90j | C14, C19 | 1h |
+| 6 | **Commentaires SQL** dans les modèles dbt (choix de jointure, SAFE_DIVIDE) | C9 | 1h |
+| 7 | **Tests métier dbt** : `gamelength_seconds > 0`, `kills >= 0` | M1 DataOps | 2h |
+| 8 | **Runbook opérationnel** `docs/RUNBOOK.md` | C16 | 1h |
 
 ### ✅ Points forts à valoriser à l'oral
 
 | Point fort | Où le montrer |
 |-----------|---------------|
-| 129 tests unitaires offline (100% mockés) | `tests/unit/` — lancer `pytest` en live |
-| Architecture Medallion documentée + PROGRESS.md | README + PROGRESS.md — 13 problèmes documentés |
+| 263 tests unitaires offline (100% mockés) | `tests/` — lancer `pytest` en live |
+| Architecture Medallion LFL + EMEA Masters | README + PROGRESS.md — 20 problèmes documentés |
+| Dashboard Streamlit 8 pages connecté à BigQuery | `dashboard/` — démo live |
+| SCD Type 2 sur historique équipe joueur | `dbt/models/dimensions/dim_player_current_team.sql` |
 | CI/CD : lint + format + tests à chaque commit | `.github/workflows/ci.yml` |
 | pydantic-settings : zéro secret commité | `ingestion/utils.py` Settings |
-| to_snake_case() : bug identifié + corrigé avec tests | commit `7c92d1d` — montrer le diff |
-| Bug join_on mwcleric : investigation dans le code source de la lib | PROGRESS.md — parfait pour "démarche de résolution" |
-| dbt : 5 modèles + schema.yml tests + star schema | `dbt/models/` |
+| Bug join_on mwcleric : investigation code source lib | PROGRESS.md problème #1 |
+| dbt : 11 modèles + schema.yml tests + star schema | `dbt/models/` |
 
 ---
 

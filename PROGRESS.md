@@ -2,9 +2,9 @@
 
 ## Contexte du projet
 
-Pipeline de données pour analyser la **LFL (La Ligue Française, D1 + D2)** depuis plusieurs sources vers GCS, avec une architecture Bronze → Silver → Gold.
+Pipeline de données pour analyser la **LFL (La Ligue Française, D1 + D2) et l'EMEA Masters** depuis plusieurs sources vers GCS, avec une architecture Bronze → Silver → Gold.
 
-**Objectif final** : alimenter une API FastAPI exposant des métriques LFL (champion pools, win rates, stats joueurs) à partir de modèles dbt Gold sur BigQuery.
+**Objectif final** : alimenter un dashboard Streamlit et une API FastAPI exposant des métriques LFL + EMEA Masters (champion pools, win rates, stats joueurs, méta, drafts) à partir de modèles dbt Gold sur BigQuery.
 
 ---
 
@@ -29,9 +29,17 @@ bronze/oracle_elixir/{year}/{filename}.csv              ← CSV brut Oracle's El
 bronze/leaguepedia/{TableName}/{YYYY-MM-DD}.json        ← NDJSON brut Leaguepedia (9 tables)
 bronze/riot_api/{YYYY-MM-DD}.ndjson                    ← PUUIDs + match IDs ranked EUW
 silver/leaguepedia/lfl_players/{YYYY-MM-DD}.json        ← joueurs LFL + comptes EUW
-silver/leaguepedia/lfl_matches/{YYYY-MM-DD}.json        ← games normalisées (ScoreboardGames)
-silver/leaguepedia/lfl_player_stats/{YYYY-MM-DD}.json   ← stats joueur/game (ScoreboardPlayers)
+silver/leaguepedia/lfl_matches/{YYYY-MM-DD}.json        ← games normalisées (LFL + EMEA Masters)
+silver/leaguepedia/lfl_player_stats/{YYYY-MM-DD}.json   ← stats joueur/game (LFL + EMEA Masters)
+silver/leaguepedia/lfl_drafts/{YYYY-MM-DD}.json         ← picks/bans dépivotés (LFL + EMEA Masters)
 ```
+
+**Pipeline complet (ordre d'exécution obligatoire) :**
+```
+Bronze ingestion → Silver transforms → bq_loader → dbt run
+```
+⚠️ L'étape `bq_loader` (GCS Silver → BigQuery raw) est indispensable entre Silver et dbt.
+Sans elle, dbt lit les anciennes données BigQuery même si Silver GCS est à jour.
 
 ---
 
@@ -63,27 +71,24 @@ uv run python -m ingestion.oracle_elixir.ingest --year 2026  # réingestion ann�
 
 **Logique** :
 - Authentification via bot Fandom (`mwrogue.EsportsClient`)
+- `TARGET_LEAGUES = {"La Ligue Française", "La Ligue Française Division 2", "EMEA Masters"}` — filtre étendu le 2026-09-07
 - Pagination automatique (500 lignes/page, max 8 000 pages)
 - Exponential backoff sur rate limits : `1s → 2s → 4s → 8s → 16s → 32s → 60s`
 - Notification Discord success/failure par table
 
-| Table | Filtre | Rows |
+| Table | Filtre | Rows (2026-09-07) |
 |---|---|---|
-| `ScoreboardGames` | LFL D1 + D2 via `OverviewPage IN (...)` | **3 053** ✅ |
-| `ScoreboardPlayers` | `OverviewPage LIKE 'LFL/%'` | **30 530** ✅ |
-| `PicksAndBansS7` | aucun | — |
-| `Tournaments` | aucun | 10 288 |
+| `ScoreboardGames` | LFL + EMEA via `OverviewPage IN (89 pages)` | **4 535** ✅ |
+| `ScoreboardPlayers` | `LIKE 'LFL/%' OR LIKE 'EMEA Masters/%'` | **32 690** ✅ |
+| `PicksAndBansS7` | aucun (toutes leagues) | **103 382** ✅ |
+| `Tournaments` | aucun | **10 462** |
 | `Teams` | aucun | — |
 | `TournamentResults` | aucun | — |
 | `TournamentRosters` | aucun | 80 886 |
 | `Teamnames` | aucun | — |
 | `Players` | aucun | 20 562 |
 
-**Dates d'ingestion actuelles :**
-- La plupart : `2026-06-04`
-- `Players` : `2026-06-05`
-- `ScoreboardGames` : `2026-06-07` → **3 053 rows** ✅
-- `ScoreboardPlayers` : `2026-06-05` → **30 530 rows** ✅ (voir problème n°14)
+**Dernière ingestion complète : 2026-09-07**
 
 **Commande :**
 ```bash
@@ -112,9 +117,12 @@ uv run python -m ingestion.riot_api.ingest --silver-date 2026-06-04
 
 ---
 
-## Silver transforms ✅ complet
+## Silver transforms ✅ complet (LFL + EMEA Masters depuis 2026-09-07)
 
 > **Validation qualité** — voir `pipeline/quality_checks/lfl_completeness.py` pour le rapport de réconciliation complet (méthodes 1→5). Résumé ci-dessous.
+
+> **Périmètre étendu le 2026-09-07** : `TARGET_LEAGUES` remplace `LFL_LEAGUES` dans les 3 transforms.
+> Les fichiers Silver incluent désormais les données LFL (D1 + D2) ET EMEA Masters.
 
 ### `lfl_players` — `pipeline/silver_transforms/lfl_players.py`
 
@@ -138,46 +146,104 @@ uv run python -m pipeline.silver_transforms.lfl_players --date 2026-06-04 --play
 
 ### `lfl_matches` ✅ — `pipeline/silver_transforms/lfl_matches.py`
 
-**Sources Bronze** : `Tournaments` (filtre LFL), `ScoreboardGames`
+**Sources Bronze** : `Tournaments` (filtre TARGET_LEAGUES), `ScoreboardGames`
 
-**État** : **3 053 lignes** — complet ✅ (`silver/leaguepedia/lfl_matches/2026-06-07.json`)
+**État** : **4 535 lignes** — complet ✅ (`silver/leaguepedia/lfl_matches/2026-09-07.json`)
 
 **Logique** :
-1. Charge `Tournaments` Bronze → extrait les 71 OverviewPages LFL
-2. Charge `ScoreboardGames` Bronze → filtre par OverviewPage → **3 053 lignes LFL**
+1. Charge `Tournaments` Bronze → extrait les 89 OverviewPages (LFL + EMEA Masters)
+2. Charge `ScoreboardGames` Bronze → filtre par OverviewPage → **4 535 lignes**
 3. Normalise chaque ligne :
    - `DateTime_UTC` → ISO 8601
    - `Gamelength` "MM:SS" → `gamelength_seconds` (int)
    - Tous les champs numériques → `int | None`
 
-> **Note** : `--tournaments-date` est nécessaire si Tournaments et ScoreboardGames ont des dates d'ingestion différentes.
-
 ```bash
-uv run python -m pipeline.silver_transforms.lfl_matches \
-  --date 2026-06-07 \
-  --tournaments-date 2026-06-04
+uv run python -m pipeline.silver_transforms.lfl_matches
 ```
 
 ---
 
 ### `lfl_player_stats` ✅ — `pipeline/silver_transforms/lfl_player_stats.py`
 
-**Sources Bronze** : `Tournaments` (filtre LFL), `ScoreboardPlayers`
+**Sources Bronze** : `Tournaments` (filtre TARGET_LEAGUES), `ScoreboardPlayers`
 
-**État** : **30 530 lignes** — complet ✅ (`silver/leaguepedia/lfl_player_stats/2026-06-05.json`)
+**État** : **32 690 lignes** — complet ✅ (`silver/leaguepedia/lfl_player_stats/2026-09-07.json`)
 
 **Logique** :
-1. Charge `Tournaments` Bronze → extrait les 71 OverviewPages LFL
-2. Filtre `ScoreboardPlayers` Bronze par OverviewPage → LFL uniquement
+1. Charge `Tournaments` Bronze → extrait les 89 OverviewPages (LFL + EMEA Masters)
+2. Filtre `ScoreboardPlayers` Bronze par OverviewPage
 3. Normalise :
    - `PlayerWin` "Yes"/"No" → `bool | None`
    - Stats (`Kills`, `Deaths`, `Gold`, etc.) → `int | None`
    - `DateTime_UTC` → ISO 8601
 
 ```bash
-uv run python -m pipeline.silver_transforms.lfl_player_stats \
-  --date <date-reingestion-ScoreboardPlayers> \
-  --tournaments-date 2026-06-04
+uv run python -m pipeline.silver_transforms.lfl_player_stats
+```
+
+---
+
+### `lfl_drafts` ✅ — `pipeline/silver_transforms/lfl_drafts.py`
+
+**Sources Bronze** : `Tournaments` (filtre TARGET_LEAGUES), `PicksAndBansS7`
+
+**État** : **82 630 actions** — complet ✅ (`silver/leaguepedia/lfl_drafts/2026-09-07.json`)
+
+**Logique** :
+1. Dépivote les colonnes wide (`Team1Ban1`…`Team2Pick5`) → format long
+2. Une ligne par action pick/ban (champion, order, side, team)
+3. Filtre sur 89 OverviewPages LFL + EMEA Masters
+
+```bash
+uv run python -m pipeline.silver_transforms.lfl_drafts
+```
+
+---
+
+## Dashboard Streamlit ✅ (2026-09-07)
+
+**Module** : `dashboard/`
+
+Dashboard multi-pages Streamlit connecté à BigQuery Gold. Répond aux questions métier de Nexus Analytics.
+
+| Page | Question métier couverte |
+|---|---|
+| `app.py` | KPIs globaux (total games, tournois, date min/max) |
+| `1_🏆_Joueurs.py` | Quels joueurs évoluent en LFL ? Historique d'équipe, mobilité |
+| `2_🐉_Champions.py` | Pool de champions, win rate, KDA par rôle |
+| `3_⚔️_Drafts.py` | 5 dernières compositions, pick order, bans prioritaires |
+| `4_📈_Meta.py` | Pick/ban/win rate sur les 3 derniers patches — méta a-t-elle changé ? |
+| `5_🛡️_Equipes.py` | Win rate, gold diff, durée moyenne par équipe et saison |
+| `6_🔍_Profil_Joueur.py` | Pool champion, stats détaillées, historique équipe |
+| `7_🚨_Alerte_Meta.py` | Champions sur/sous-performants (winrate anormal sur 2 derniers patches) |
+| `8_🌍_LFL_vs_EMEA.py` | Comparaison méta LFL vs EMEA Masters — champions émergents |
+
+**Commande :**
+```bash
+uv run streamlit run dashboard/app.py --server.port 8501 --server.headless true
+```
+
+---
+
+## Gold dbt ✅ (11 modèles, 2026-09-07)
+
+| Modèle | Lignes | Description |
+|---|---|---|
+| `stg_lfl_matches` (view) | — | Vue sur `raw.lfl_matches` |
+| `stg_lfl_player_stats` (view) | — | Vue sur `raw.lfl_player_stats` |
+| `stg_lfl_drafts` (view) | — | Vue sur `raw.lfl_drafts` |
+| `dim_patch` | 109 | Patches distincts |
+| `dim_champion` | 170 | Champions joués |
+| `dim_team` | 194 | Équipes (LFL + EMEA) |
+| `dim_player` | 939 | Joueurs (LFL + EMEA) |
+| `dim_player_current_team` | 939 | Équipe actuelle + historique SCD2 |
+| `fact_meta_trend` | 7 400 | Pick/ban/win rate par champion + patch |
+| `fact_player_game` | 32 700 | Stats joueur par game |
+| `fact_draft` | 82 600 | Actions pick/ban dépivotées |
+
+```bash
+uv run --with dbt-bigquery dbt run --project-dir dbt --profiles-dir dbt
 ```
 
 ---
@@ -559,22 +625,17 @@ gcloud auth application-default set-quota-project nexus-analytics-prod-498107
 
 ---
 
-### P3 — Phase 2 : Dashboard (post-certification ou pour enrichir l'oral)
+### P3 — Dashboard ✅ (2026-09-07)
 
-Le rapport BC01 classe le dashboard en **Phase 2** (F7, score RICE 0,7).
-Thomas Bourgeois l'a identifié comme différenciant commercial.
-Yasmine a mentionné vouloir un outil de visualisation sans SQL.
+- [x] **Dashboard Streamlit** (8 pages) — opérationnel ✅ 2026-09-07
+  - Connecté à BigQuery Gold via `google-cloud-bigquery`
+  - 8 pages couvrant toutes les questions métier Nexus Analytics
+  - Données LFL **et EMEA Masters** disponibles
+  - Lancement : `uv run streamlit run dashboard/app.py --server.headless true`
 
-- [ ] **Looker Studio (Google Data Studio)** — outil gratuit natif BigQuery, sans code.
-  - Connecter BigQuery Gold (`gold_gold.fact_player_game`, `gold_gold.dim_player`)
-  - Page 1 : classement joueurs LFL (win rate, KDA moyen, par saison)
-  - Page 2 : tendances méta par patch (nécessite `fact_meta_trend`)
-  - Page 3 : profil adversaire — compos jouées, joueurs clés d'une équipe
-  - Partager le lien dans le README et dans le rapport E4
-
-- [ ] **Section "alerte méta"** — champion avec winrate anormal sur les 2 derniers patches.
-  Thomas Bourgeois l'a citée comme fonctionnalité différenciante. Peut être un endpoint FastAPI
-  (`GET /meta/alerts`) + une section Looker Studio.
+- [x] **Page "Alerte méta"** — champions sur/sous-performants sur 2 derniers patches ✅ 2026-09-07
+- [x] **Page "LFL vs EMEA Masters"** — comparaison méta inter-compétitions ✅ 2026-09-07
+- [x] **SCD Type 2** — `dim_player_current_team` + snapshot dbt `snap_player_team` ✅ 2026-09-07
 
 ---
 
@@ -648,6 +709,32 @@ Solution : le bucket existant a été créé en multi-région `EU`. GCS n'autori
 
 ---
 
+**Problème #19 — EMEA Masters absent du dashboard (2026-09-07)**
+
+Symptôme : la page "LFL vs EMEA Masters" affichait "Aucune donnée EMEA Masters détectée" malgré les données en GCS.
+
+Cause racine (3 niveaux) :
+1. `TARGET_LEAGUES` ne contenait pas `"EMEA Masters"` dans les Silver transforms ni l'ingestion Bronze
+2. `ScoreboardPlayers` avait un filtre `LIKE 'LFL/%'` excluant les pages EMEA Masters (`EMEA Masters/...`)
+3. L'étape `bq_loader` avait été omise — dbt lisait les anciennes tables BigQuery même si Silver GCS était à jour
+4. Cache Streamlit (`ttl=600s`) servait les vieux résultats après mise à jour BigQuery
+
+Solution : `TARGET_LEAGUES` + `"EMEA Masters"` dans 3 Silver transforms + ingestion, WHERE étendu pour ScoreboardPlayers, fix `gcs_client()` project_id, pipeline relancé complet, Streamlit redémarré.
+
+Résultat : 89 OverviewPages, 4 535 matchs, 939 joueurs, 194 équipes dont EMEA Masters.
+
+---
+
+**Problème #20 — BigQuery `ORDER BY in ARRAY_AGG` non supporté dans `dim_player_current_team` (2026-09-07)**
+
+Symptôme : dbt échouait avec `ORDER BY in arguments is not supported on analytic functions`.
+
+Cause : BigQuery n'autorise pas `ORDER BY` dans `ARRAY_AGG` utilisé comme fonction analytique.
+
+Solution : restructuration en deux CTEs — `all_teams` (GROUP BY + ARRAY_AGG) et `latest_team` (QUALIFY ROW_NUMBER()) — puis JOIN.
+
+---
+
 **Problème #18 — Bronze ScoreboardPlayers corrompu (données 2012 MLG)**
 
 Symptôme : `lfl_player_stats` Silver retournait `Filtered 26500 → 0 LFL player-game rows`. Le fichier `bronze/leaguepedia/ScoreboardPlayers/2026-06-04.json` contenait 26 500 lignes d'anciennes compétitions (MLG 2012, GPL 2014...) — aucune LFL.
@@ -695,44 +782,48 @@ Enseignement : les scripts individuels ont une valeur par défaut "aujourd'hui" 
 ## Commandes utiles
 
 ```bash
-# Ingestion Oracle's Elixir
-uv run python -m ingestion.oracle_elixir.ingest --all
-uv run python -m ingestion.oracle_elixir.ingest --year 2026
+# ─── Pipeline complet (ordre obligatoire) ────────────────────────────────────
 
-# Ingestion Leaguepedia (toutes tables — Tournaments en premier pour le filtre LFL)
-uv run python -m ingestion.leaguepedia.ingest
+# 1. Bronze — Tournaments en premier (référence pour le filtre TARGET_LEAGUES)
+uv run python -m ingestion.leaguepedia.ingest --table Tournaments
+
+# 2. Bronze — tables de données de jeu
 uv run python -m ingestion.leaguepedia.ingest --table ScoreboardGames
 uv run python -m ingestion.leaguepedia.ingest --table ScoreboardPlayers
+uv run python -m ingestion.leaguepedia.ingest --table PicksAndBansS7
 
-# Ingestion Riot API
+# 3. Silver transforms (LFL + EMEA Masters)
+uv run python -m pipeline.silver_transforms.lfl_matches
+uv run python -m pipeline.silver_transforms.lfl_player_stats
+uv run python -m pipeline.silver_transforms.lfl_drafts
+
+# 4. bq_loader — ⚠️ OBLIGATOIRE avant dbt (GCS Silver → BigQuery raw)
+uv run python -m pipeline.loaders.bq_loader --source leaguepedia --table lfl_matches --date $(date +%Y-%m-%d)
+uv run python -m pipeline.loaders.bq_loader --source leaguepedia --table lfl_player_stats --date $(date +%Y-%m-%d)
+uv run python -m pipeline.loaders.bq_loader --source leaguepedia --table lfl_drafts --date $(date +%Y-%m-%d)
+
+# 5. dbt — rebuild Gold
+uv run --with dbt-bigquery dbt run --project-dir dbt --profiles-dir dbt
+
+# ─── Dashboard ────────────────────────────────────────────────────────────────
+uv run streamlit run dashboard/app.py --server.port 8501 --server.headless true
+# http://localhost:8501
+
+# ─── Autres ingestions ────────────────────────────────────────────────────────
+uv run python -m ingestion.oracle_elixir.ingest --all
+uv run python -m ingestion.oracle_elixir.ingest --year 2026
 uv run python -m ingestion.riot_api.ingest --silver-date 2026-06-04
 
-# Silver transforms
-uv run python -m pipeline.silver_transforms.lfl_players --date 2026-06-04 --players-date 2026-06-05
-
-# lfl_matches : --tournaments-date = date d'ingestion de Tournaments (peut différer de --date)
-uv run python -m pipeline.silver_transforms.lfl_matches \
-  --date 2026-06-07 \
-  --tournaments-date 2026-06-04
-
-# lfl_player_stats : ⚠️ réingérer ScoreboardPlayers d'abord, puis lancer avec la bonne date
-uv run python -m pipeline.silver_transforms.lfl_player_stats \
-  --date <date-reingestion> \
-  --tournaments-date 2026-06-04
-
-# API FastAPI
+# ─── API FastAPI ──────────────────────────────────────────────────────────────
 uv run uvicorn api.main:app --reload
-# Docs interactives : http://localhost:8000/docs
-# Exemple curl :
 # curl -H "X-API-Key: nexus-dev-secret-change-in-prod" http://localhost:8000/players
 
-# Terraform
+# ─── Infrastructure ───────────────────────────────────────────────────────────
 cd terraform && terraform plan
 cd terraform && terraform apply
 
-# Tests
+# ─── Qualité ──────────────────────────────────────────────────────────────────
 uv run pytest tests/ -v
-
-# Lint + format
 uv run ruff check . && uv run ruff format .
+uv run --with dbt-bigquery dbt test --project-dir dbt --profiles-dir dbt
 ```
