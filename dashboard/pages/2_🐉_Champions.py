@@ -3,7 +3,7 @@
 import plotly.express as px
 import streamlit as st
 
-from dashboard.queries import fetch_champions
+from dashboard.queries import fetch_champions, fetch_seasons
 
 st.set_page_config(page_title="Champions — Nexus Analytics", page_icon="🐉", layout="wide")
 
@@ -12,7 +12,12 @@ st.caption("Pick rates, win rates et distribution par rôle — toutes saisons")
 
 # ─── Filtres ────────────────────────────────────────────────────────────────
 
-col_f1, col_f2 = st.columns([2, 2])
+with st.spinner("Chargement des saisons..."):
+    seasons = fetch_seasons()
+
+col_f0, col_f1, col_f2 = st.columns([3, 2, 2])
+with col_f0:
+    selected_season = st.selectbox("Saison", options=["Toutes les saisons"] + seasons)
 with col_f1:
     min_games = st.slider("Parties minimum", min_value=1, max_value=50, value=5, step=1)
 with col_f2:
@@ -21,8 +26,10 @@ with col_f2:
         options=["Tous", "Top", "Jungle", "Mid", "Bot", "Support"],
     )
 
+season_filter = None if selected_season == "Toutes les saisons" else selected_season
+
 with st.spinner("Chargement..."):
-    df = fetch_champions(min_games=min_games)
+    df = fetch_champions(min_games=min_games, season=season_filter)
 
 if df.empty:
     st.warning("Aucun champion trouvé.")

@@ -3,7 +3,7 @@
 import plotly.express as px
 import streamlit as st
 
-from dashboard.queries import fetch_players
+from dashboard.queries import fetch_players, fetch_seasons
 
 st.set_page_config(page_title="Joueurs — Nexus Analytics", page_icon="🏆", layout="wide")
 
@@ -12,7 +12,12 @@ st.caption("Statistiques agrégées sur toute la carrière LFL (D1 + D2)")
 
 # ─── Filtres ────────────────────────────────────────────────────────────────
 
-col_f1, col_f2 = st.columns([2, 2])
+with st.spinner("Chargement des saisons..."):
+    seasons = fetch_seasons()
+
+col_f0, col_f1, col_f2 = st.columns([3, 2, 2])
+with col_f0:
+    selected_season = st.selectbox("Saison", options=["Toutes les saisons"] + seasons)
 with col_f1:
     min_games = st.slider("Parties minimum", min_value=1, max_value=100, value=10, step=5)
 with col_f2:
@@ -28,8 +33,10 @@ with col_f2:
         }[x],
     )
 
+season_filter = None if selected_season == "Toutes les saisons" else selected_season
+
 with st.spinner("Chargement..."):
-    df = fetch_players(min_games=min_games)
+    df = fetch_players(min_games=min_games, season=season_filter)
 
 if df.empty:
     st.warning("Aucun joueur trouvé avec ces critères.")

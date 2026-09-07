@@ -31,49 +31,154 @@ def _table(dataset: str, name: str) -> str:
 
 
 @st.cache_data(ttl=600, show_spinner=False)
-def fetch_players(min_games: int = 5) -> pd.DataFrame:
-    """Joueurs LFL avec stats agrégées — min_games filtre les remplaçants."""
+def fetch_seasons() -> list[str]:
+    """Liste des saisons/tournois distincts depuis stg_lfl_matches."""
+    sql = f"""
+        SELECT DISTINCT REGEXP_EXTRACT(overview_page, r'^[^/]+/[^/]+') AS season
+        FROM {_table(DATASET_STAGING, "stg_lfl_matches")}
+        WHERE overview_page IS NOT NULL
+        ORDER BY season DESC
+        LIMIT 40
+    """
+    rows = _client().query(sql).to_dataframe()
+    return [r for r in rows["season"].tolist() if r]
+
+
+@st.cache_data(ttl=600, show_spinner=False)
+def fetch_players(min_games: int = 5, season: str | None = None) -> pd.DataFrame:
+    """Joueurs LFL avec stats agrégées — filtrables par saison."""
+    if season:
+        sql = f"""
+            SELECT
+                ps.player_link                                                          AS player_id,
+                ps.player_name,
+                COUNT(DISTINCT ps.game_id)                                              AS total_games,
+                ROUND(COUNTIF(ps.player_win) * 100.0 / COUNT(*), 1)                    AS win_rate_pct,
+                ROUND(AVG(ps.kills), 2)                                                 AS avg_kills,
+                ROUND(AVG(ps.deaths), 2)                                                AS avg_deaths,
+                ROUND(AVG(ps.assists), 2)                                               AS avg_assists,
+                ROUND(AVG(ps.cs), 2)                                                    AS avg_cs,
+                ROUND(SAFE_DIVIDE(AVG(ps.kills) + AVG(ps.assists),
+                                  GREATEST(AVG(ps.deaths), 1)), 2)                     AS kda
+            FROM {_table(DATASET_STAGING, "stg_lfl_player_stats")} ps
+            JOIN {_table(DATASET_STAGING, "stg_lfl_matches")} m
+              ON ps.game_id = m.game_id
+            WHERE STARTS_WITH(m.overview_page, '{season}')
+            GROUP BY ps.player_link, ps.player_name
+            HAVING COUNT(DISTINCT ps.game_id) >= {min_games}
+            ORDER BY total_games DESC
+            LIMIT 200
+        """
+    else:
+        sql = f"""
+            SELECT
+                player_id,
+                player_name,
+                total_games,
+                win_rate_pct,
+                avg_kills,
+                avg_deaths,
+                avg_assists,
+                avg_cs,
+                ROUND(SAFE_DIVIDE(avg_kills + avg_assists, GREATEST(avg_deaths, 1)), 2) AS kda
+            FROM {_table(DATASET_GOLD, "dim_player")}
+            WHERE total_games >= {min_games}
+            ORDER BY total_games DESC
+            LIMIT 200
+        """
+    return _client().query(sql).to_dataframe()
+
+
+@st.cache_data(ttl=600, show_spinner=False)
+def fetch_champions(min_games: int = 3, season: str | None = None) -> pd.DataFrame:
+    """Champions avec pick rates et win rates — filtrables par saison."""
+    if season:
+        sql = f"""
+            SELECT
+                ps.champion,
+                COUNT(*)                                                AS total_games_played,
+                ROUND(COUNTIF(ps.player_win) * 100.0 / COUNT(*), 1)    AS win_rate_pct,
+                ROUND(AVG(ps.kills), 2)                                 AS avg_kills,
+                ROUND(AVG(ps.deaths), 2)                                AS avg_deaths,
+                ROUND(AVG(ps.assists), 2)                               AS avg_assists,
+                ROUND(COUNT(*) * 100.0 / SUM(COUNT(*)) OVER (), 2)      AS pick_rate_pct
+            FROM {_table(DATASET_STAGING, "stg_lfl_player_stats")} ps
+            JOIN {_table(DATASET_STAGING, "stg_lfl_matches")} m
+              ON ps.game_id = m.game_id
+            WHERE STARTS_WITH(m.overview_page, '{season}')
+            GROUP BY ps.champion
+            HAVING COUNT(*) >= {min_games}
+            ORDER BY total_games_played DESC
+            LIMIT 100
+        """
+    else:
+        sql = f"""
+            SELECT
+                champion,
+                total_games_played,
+                win_rate_pct,
+                avg_kills,
+                avg_deaths,
+                avg_assists,
+                picks_top,
+                picks_jungle,
+                picks_mid,
+                picks_bot,
+                picks_support,
+                ROUND(total_games_played * 100.0 / SUM(total_games_played) OVER (), 2) AS pick_rate_pct
+            FROM {_table(DATASET_GOLD, "dim_champion")}
+            WHERE total_games_played >= {min_games}
+            ORDER BY total_games_played DESC
+            LIMIT 100
+        """
+    return _client().query(sql).to_dataframe()
+
+
+@st.cache_data(ttl=600, show_spinner=False)
+def fetch_player_champion_pool(player_name: str) -> pd.DataFrame:
+    """Pool de champions d'un joueur — picks, winrate, rôle principal."""
     sql = f"""
         SELECT
-            player_name,
-            total_games,
-            win_rate_pct,
-            avg_kills,
-            avg_deaths,
-            avg_assists,
-            avg_cs,
-            ROUND(SAFE_DIVIDE(avg_kills + avg_assists, GREATEST(avg_deaths, 1)), 2) AS kda
-        FROM {_table(DATASET_GOLD, "dim_player")}
-        WHERE total_games >= {min_games}
-        ORDER BY total_games DESC
-        LIMIT 200
+            ps.champion,
+            COUNT(*)                                                AS games,
+            ROUND(COUNTIF(ps.player_win) * 100.0 / COUNT(*), 1)    AS win_rate_pct,
+            ps.role,
+            ROUND(AVG(ps.kills), 2)                                 AS avg_kills,
+            ROUND(AVG(ps.deaths), 2)                                AS avg_deaths,
+            ROUND(AVG(ps.assists), 2)                               AS avg_assists
+        FROM {_table(DATASET_STAGING, "stg_lfl_player_stats")} ps
+        WHERE ps.player_name = '{player_name}'
+        GROUP BY ps.champion, ps.role
+        ORDER BY games DESC
+        LIMIT 30
     """
     return _client().query(sql).to_dataframe()
 
 
 @st.cache_data(ttl=600, show_spinner=False)
-def fetch_champions(min_games: int = 3) -> pd.DataFrame:
-    """Champions avec pick rates et win rates agrégés."""
+def fetch_player_names() -> list[str]:
+    """Liste des noms de joueurs pour les sélecteurs."""
     sql = f"""
-        SELECT
-            champion,
-            total_games_played,
-            win_rate_pct,
-            avg_kills,
-            avg_deaths,
-            avg_assists,
-            picks_top,
-            picks_jungle,
-            picks_mid,
-            picks_bot,
-            picks_support,
-            ROUND(total_games_played * 100.0 / SUM(total_games_played) OVER (), 2) AS pick_rate_pct
-        FROM {_table(DATASET_GOLD, "dim_champion")}
-        WHERE total_games_played >= {min_games}
-        ORDER BY total_games_played DESC
-        LIMIT 100
+        SELECT DISTINCT player_name
+        FROM {_table(DATASET_GOLD, "dim_player")}
+        ORDER BY player_name
     """
-    return _client().query(sql).to_dataframe()
+    rows = _client().query(sql).to_dataframe()
+    return rows["player_name"].tolist()
+
+
+@st.cache_data(ttl=600, show_spinner=False)
+def fetch_player_stats_by_name(player_name: str) -> dict | None:
+    """Stats complètes d'un joueur par nom."""
+    sql = f"""
+        SELECT *,
+            ROUND(SAFE_DIVIDE(avg_kills + avg_assists, GREATEST(avg_deaths, 1)), 2) AS kda
+        FROM {_table(DATASET_GOLD, "dim_player")}
+        WHERE player_name = '{player_name}'
+        LIMIT 1
+    """
+    rows = _client().query(sql).to_dataframe()
+    return rows.iloc[0].to_dict() if not rows.empty else None
 
 
 @st.cache_data(ttl=600, show_spinner=False)
