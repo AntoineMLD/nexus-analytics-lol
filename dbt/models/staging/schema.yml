@@ -14,6 +14,10 @@ sources:
         description: "Joueurs LFL avec leurs comptes EUW Soloqueue."
       - name: lfl_drafts
         description: "Actions de draft LFL (picks et bans) dépivotées depuis PicksAndBansS7."
+      - name: oracle_elixir
+        description: "Stats avancées joueur LFL depuis Oracle's Elixir CSV (golddiffat15, cspm, dpm)."
+      - name: riot_api
+        description: "PUUIDs des joueurs LFL depuis l'API Riot Games."
 
 models:
   - name: stg_lfl_matches
@@ -68,6 +72,39 @@ models:
           - accepted_values:
               arguments:
                 values: ["Top", "Jungle", "Mid", "Bot", "Support"]
+
+  - name: stg_oracle_elixir
+    description: "Vue staging Oracle's Elixir : une ligne par joueur par partie LFL. Métriques avancées non disponibles dans Leaguepedia."
+    columns:
+      - name: game_id
+        description: "Identifiant de partie au format Riot (ESPORTSTMNT01_...)."
+        tests:
+          - not_null
+      - name: player_name
+        description: "Pseudo du joueur."
+        tests:
+          - not_null
+      - name: position
+        description: "Rôle dans la partie."
+        tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: ["top", "jng", "mid", "bot", "sup"]
+
+  - name: stg_riot_players
+    description: "Vue staging Riot API : association joueur → PUUID."
+    columns:
+      - name: player_name
+        description: "Pseudo du joueur LFL."
+        tests:
+          - not_null
+          - unique
+      - name: puuid
+        description: "PUUID Riot Games (78 caractères)."
+        tests:
+          - not_null
+          - unique
 
   - name: stg_lfl_drafts
     description: "Vue staging sur lfl_drafts : une ligne par action pick/ban par partie."

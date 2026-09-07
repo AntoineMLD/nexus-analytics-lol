@@ -15,6 +15,7 @@ from google.cloud import bigquery
 
 DATASET_GOLD = "gold_gold"
 DATASET_STAGING = "gold_staging"
+DATASET_GOLD_FULL = "gold_gold"
 
 
 def _client() -> bigquery.Client:
@@ -510,3 +511,80 @@ def fetch_kpi_summary() -> dict:
         "date_min": str(row["date_min"]),
         "date_max": str(row["date_max"]),
     }
+
+
+@st.cache_data(ttl=600, show_spinner=False)
+def fetch_player_oe_stats(player_name: str) -> dict | None:
+    """Retourne les métriques avancées Oracle's Elixir agrégées pour un joueur LFL.
+
+    Calcule les moyennes sur toutes les parties disponibles dans fact_oe_player_game.
+    Retourne None si le joueur n'a pas de données OE (table absente ou joueur absent).
+
+    Args:
+        player_name: Pseudo du joueur (ex: "Caliste").
+    """
+    try:
+        sql = f"""
+            SELECT
+                COUNT(*)                                    AS games_oe,
+                ROUND(AVG(cs_per_min), 2)                  AS avg_cs_per_min,
+                ROUND(AVG(damage_per_min), 0)              AS avg_dpm,
+                ROUND(AVG(gold_diff_at_15), 0)             AS avg_gold_diff_15,
+                ROUND(AVG(cs_diff_at_15), 1)               AS avg_cs_diff_15,
+                ROUND(AVG(vision_score), 1)                AS avg_vision_score_oe,
+                COUNTIF(gold_diff_at_15 IS NOT NULL)       AS games_with_diff_metrics
+            FROM {_table(DATASET_GOLD_FULL, "fact_oe_player_game")}
+            WHERE player_name = @player_name
+        """
+        job_config = bigquery.QueryJobConfig(
+            query_parameters=[bigquery.ScalarQueryParameter("player_name", "STRING", player_name)]
+        )
+        rows = _client().query(sql, job_config=job_config).to_dataframe()
+        if rows.empty or rows.iloc[0]["games_oe"] == 0:
+            return None
+        row = rows.iloc[0]
+        return {
+            "games_oe": int(row["games_oe"]),
+            "avg_cs_per_min": row["avg_cs_per_min"],
+            "avg_dpm": row["avg_dpm"],
+            "avg_gold_diff_15": row["avg_gold_diff_15"],
+            "avg_cs_diff_15": row["avg_cs_diff_15"],
+            "avg_vision_score_oe": row["avg_vision_score_oe"],
+            "games_with_diff_metrics": int(row["games_with_diff_metrics"]),
+        }
+    except Exception:
+        return None
+
+
+@st.cache_data(ttl=600, show_spinner=False)
+def fetch_player_oe_gold_diff_trend(player_name: str) -> "pd.DataFrame":
+    """Retourne l'évolution du gold diff à 15 min par saison pour un joueur.
+
+    Utilisé pour afficher la progression early game au fil des splits.
+    Retourne un DataFrame vide si la table est absente ou sans données.
+
+    Args:
+        player_name: Pseudo du joueur.
+    """
+    try:
+        sql = f"""
+            SELECT
+                year,
+                split,
+                CONCAT(CAST(year AS STRING), ' ', split) AS season,
+                ROUND(AVG(gold_diff_at_15), 0)           AS avg_gold_diff_15,
+                COUNT(*)                                  AS games
+            FROM {_table(DATASET_GOLD_FULL, "fact_oe_player_game")}
+            WHERE player_name = @player_name
+              AND gold_diff_at_15 IS NOT NULL
+            GROUP BY year, split
+            ORDER BY year, split
+        """
+        job_config = bigquery.QueryJobConfig(
+            query_parameters=[bigquery.ScalarQueryParameter("player_name", "STRING", player_name)]
+        )
+        return _client().query(sql, job_config=job_config).to_dataframe()
+    except Exception:
+        import pandas as pd
+
+        return pd.DataFrame()

@@ -6,6 +6,8 @@ import streamlit as st
 from dashboard.queries import (
     fetch_player_champion_pool,
     fetch_player_names,
+    fetch_player_oe_gold_diff_trend,
+    fetch_player_oe_stats,
     fetch_player_stats_by_name,
 )
 from dashboard.utils import question_metier
@@ -35,6 +37,8 @@ selected_player = st.selectbox("Joueur", options=player_names)
 with st.spinner(f"Chargement du profil de {selected_player}..."):
     stats = fetch_player_stats_by_name(selected_player)
     pool = fetch_player_champion_pool(selected_player)
+    oe_stats = fetch_player_oe_stats(selected_player)
+    oe_trend = fetch_player_oe_gold_diff_trend(selected_player)
 
 if not stats:
     st.warning(f"Aucune donnée agrégée pour {selected_player}.")
@@ -133,6 +137,74 @@ with col_b:
         hide_index=True,
         width="stretch",
     )
+
+# ─── Métriques avancées Oracle's Elixir ──────────────────────────────────────
+
+st.markdown("---")
+st.markdown("### Métriques avancées — Oracle's Elixir")
+st.caption(
+    "Source : Oracle's Elixir CSV — données non disponibles dans Leaguepedia (CS/min, DPM, gold diff à 15 min)"
+)
+
+if oe_stats is None:
+    st.info(
+        "Données Oracle's Elixir non disponibles pour ce joueur. "
+        "Le pipeline Oracle's Elixir doit être exécuté (`uv run python -m pipeline.silver_transforms.oracle_elixir --all-years`)."
+    )
+else:
+    games_note = ""
+    if oe_stats["games_with_diff_metrics"] < oe_stats["games_oe"]:
+        games_note = (
+            f" (diff. à 15 min disponible sur {oe_stats['games_with_diff_metrics']}/"
+            f"{oe_stats['games_oe']} parties — données partielles avant 2021)"
+        )
+
+    col1, col2, col3, col4 = st.columns(4)
+    col1.metric(
+        "Parties OE",
+        int(oe_stats["games_oe"]),
+        help="Nombre de parties avec données Oracle's Elixir",
+    )
+    col2.metric(
+        "CS / min",
+        f"{oe_stats['avg_cs_per_min']:.2f}" if oe_stats["avg_cs_per_min"] else "—",
+        help="CS par minute en moyenne sur toutes les parties OE",
+    )
+    col3.metric(
+        "DPM",
+        f"{int(oe_stats['avg_dpm'])}" if oe_stats["avg_dpm"] else "—",
+        help="Dégâts par minute en moyenne",
+    )
+    col4.metric(
+        "Gold diff. à 15 min",
+        f"{int(oe_stats['avg_gold_diff_15']):+d}" if oe_stats["avg_gold_diff_15"] else "—",
+        help="Différentiel d'or à 15 min vs adversaire même rôle (positif = avance)" + games_note,
+        delta=int(oe_stats["avg_gold_diff_15"]) if oe_stats["avg_gold_diff_15"] else None,
+        delta_color="normal",
+    )
+
+    if not oe_trend.empty and len(oe_trend) > 1:
+        st.markdown("#### Évolution du gold diff à 15 min par saison")
+        fig_trend = px.bar(
+            oe_trend,
+            x="season",
+            y="avg_gold_diff_15",
+            text="avg_gold_diff_15",
+            color="avg_gold_diff_15",
+            color_continuous_scale="RdYlGn",
+            labels={
+                "season": "Saison",
+                "avg_gold_diff_15": "Gold diff. moyen à 15 min",
+            },
+        )
+        fig_trend.add_hline(y=0, line_dash="dash", line_color="gray")
+        fig_trend.update_traces(texttemplate="%{text:+,.0f}")
+        fig_trend.update_layout(
+            height=300,
+            coloraxis_showscale=False,
+            xaxis_title=None,
+        )
+        st.plotly_chart(fig_trend, width="stretch")
 
 # ─── Tableau pool complet ─────────────────────────────────────────────────────
 

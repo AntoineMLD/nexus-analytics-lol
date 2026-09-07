@@ -77,3 +77,30 @@ models:
         description: "Côté de l'équipe dans la partie : 1 (bleu) ou 2 (rouge)."
         tests:
           - not_null
+
+  - name: fact_oe_player_game
+    description: >
+      Table de faits Oracle's Elixir : métriques avancées par joueur par partie LFL.
+      Complément de fact_player_game (Leaguepedia) avec les données non disponibles
+      dans Leaguepedia : gold/CS diff à 10/15 min, CS par minute, DPM.
+      Source indépendante — game_id au format Riot, non joignable directement
+      sur fact_player_game.game_id.
+    columns:
+      - name: game_id
+        description: "Identifiant de partie au format Riot (ESPORTSTMNT01_...)."
+        tests:
+          - not_null
+      - name: player_name
+        description: "Pseudo du joueur."
+        tests:
+          - not_null
+      - name: position
+        description: "Rôle dans la partie."
+        tests:
+          - not_null
+      - name: gold_diff_at_15
+        description: "Différentiel d'or à 15 min vs joueur adverse même rôle. NULL avant 2021."
+      - name: cs_per_min
+        description: "CS par minute. NULL si absent dans la source."
+      - name: damage_per_min
+        description: "Dégâts par minute (DPM)."

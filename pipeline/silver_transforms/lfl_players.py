@@ -1,9 +1,12 @@
 """Silver transform: extract LFL players and their EUW Soloqueue IDs.
 
-Reads:
+Reads (primary):
   - bronze/leaguepedia/Tournaments/{date}.json
   - bronze/leaguepedia/TournamentRosters/{date}.json
-  - bronze/leaguepedia/Players/{date}.json
+  - bronze/leaguepedia/Players/{date}.json          ← SoloqueueIds field
+
+Reads (secondary — wiki scraping, enriches accounts not found in Cargo API):
+  - bronze/leaguepedia_wiki/player_ids/{latest}.json  ← riot_ids from wiki pages
 
 Writes:
   - silver/leaguepedia/lfl_players/{date}.json  (NDJSON, one player per line)
@@ -142,6 +145,75 @@ def build_soloqueue_lookup(players_bronze: list[dict]) -> dict[str, list[str]]:
     return lookup
 
 
+def load_wiki_bronze(bucket_name: str) -> dict[str, list[str]]:
+    """Load the most recent wiki scraping Bronze file and return a player→ids mapping.
+
+    The wiki Bronze file contains riot_ids scraped from Leaguepedia player pages.
+    This is a secondary source: it enriches players not found in the Cargo API.
+
+    Returns an empty dict if no wiki Bronze file exists (non-blocking).
+    """
+    prefix = "bronze/leaguepedia_wiki/player_ids/"
+    try:
+        with gcs_client() as client:
+            blobs = sorted(
+                client.bucket(bucket_name).list_blobs(prefix=prefix),
+                key=lambda b: b.name,
+            )
+        if not blobs:
+            logger.info("No wiki Bronze file found — skipping secondary enrichment.")
+            return {}
+        latest_blob = blobs[-1]
+        with gcs_client() as client:
+            content = client.bucket(bucket_name).blob(latest_blob.name).download_as_text()
+        rows = [json.loads(line) for line in content.splitlines() if line.strip()]
+        lookup = {
+            row["player"]: row.get("riot_ids", [])
+            for row in rows
+            if row.get("player") and row.get("riot_ids")
+        }
+        logger.info(
+            "Loaded wiki Bronze from gs://%s/%s — %d players with ids.",
+            bucket_name,
+            latest_blob.name,
+            len(lookup),
+        )
+        return lookup
+    except Exception as exc:
+        logger.warning("Could not load wiki Bronze (non-blocking): %s", exc)
+        return {}
+
+
+def merge_soloqueue_lookups(
+    cargo_lookup: dict[str, list[str]],
+    wiki_lookup: dict[str, list[str]],
+) -> dict[str, list[str]]:
+    """Merge Cargo API and wiki lookups, with wiki IDs taking priority.
+
+    For each player:
+    - If wiki has IDs: use wiki IDs (more up-to-date format: gameName#tagLine)
+    - If only Cargo has IDs: use Cargo IDs
+    - If neither: empty list
+
+    Args:
+        cargo_lookup: player OverviewPage → EUW accounts (from Cargo API)
+        wiki_lookup: player name → riot IDs (from wiki scraping)
+    """
+    merged: dict[str, list[str]] = {}
+    all_players = set(cargo_lookup.keys()) | set(wiki_lookup.keys())
+    for player in all_players:
+        wiki_ids = wiki_lookup.get(player, [])
+        cargo_ids = cargo_lookup.get(player, [])
+        merged[player] = wiki_ids if wiki_ids else cargo_ids
+    wiki_enriched = sum(1 for p in cargo_lookup if wiki_lookup.get(p) and not cargo_lookup.get(p))
+    logger.info(
+        "Merged lookups: %d players total, %d enriched by wiki (had no Cargo IDs).",
+        len(merged),
+        wiki_enriched,
+    )
+    return merged
+
+
 def enrich_players(player_names: list[str], soloqueue_lookup: dict[str, list[str]]) -> list[dict]:
     """Combine player names with their EUW accounts.
 
@@ -208,7 +280,9 @@ def run_transform(date: str, players_date: str | None = None) -> None:
         return
 
     player_names = extract_players_from_rosters(rosters, lfl_pages)
-    soloqueue_lookup = build_soloqueue_lookup(players_bronze)
+    cargo_lookup = build_soloqueue_lookup(players_bronze)
+    wiki_lookup = load_wiki_bronze(bucket)
+    soloqueue_lookup = merge_soloqueue_lookups(cargo_lookup, wiki_lookup)
     enriched = enrich_players(player_names, soloqueue_lookup)
 
     save_to_gcs(enriched, bucket, date)
