@@ -189,12 +189,19 @@ def fetch_player_stats_by_name(player_name: str) -> dict | None:
     """Stats complètes d'un joueur par nom, avec équipe actuelle et historique."""
     sql = f"""
         SELECT
-            p.*,
+            p.player_id,
+            p.player_name,
+            p.total_games,
+            p.win_rate_pct,
+            p.avg_kills,
+            p.avg_deaths,
+            p.avg_assists,
+            p.avg_cs,
             ROUND(SAFE_DIVIDE(p.avg_kills + p.avg_assists, GREATEST(p.avg_deaths, 1)), 2) AS kda,
             t.current_team,
             t.last_game_date,
             t.total_games_in_team,
-            t.all_teams_played
+            ARRAY_TO_STRING(t.all_teams_played, ' · ')                             AS teams_history
         FROM {_table(DATASET_GOLD, "dim_player")} p
         LEFT JOIN {_table(DATASET_GOLD, "dim_player_current_team")} t
           ON p.player_id = t.player_id
@@ -236,6 +243,31 @@ def fetch_meta_by_patch(patch: str | None = None) -> pd.DataFrame:
         {where}
         ORDER BY picks DESC
         LIMIT 100
+    """
+    return _client().query(sql).to_dataframe()
+
+
+@st.cache_data(ttl=600, show_spinner=False)
+def fetch_ban_rates(patch: str | None = None) -> pd.DataFrame:
+    """Ban rate par champion et par patch depuis fact_draft.
+
+    Complète fact_meta_trend qui ne contient pas les bans.
+    """
+    where = f"AND patch = '{patch}'" if patch else ""
+    sql = f"""
+        SELECT
+            patch,
+            champion,
+            COUNT(*)                                                                AS bans,
+            ROUND(COUNT(*) * 100.0 / SUM(COUNT(*)) OVER (PARTITION BY patch), 2)  AS ban_rate_pct
+        FROM {_table(DATASET_GOLD, "fact_draft")}
+        WHERE action_type = 'ban'
+          AND patch IS NOT NULL
+          AND champion IS NOT NULL
+          {where}
+        GROUP BY patch, champion
+        ORDER BY bans DESC
+        LIMIT 300
     """
     return _client().query(sql).to_dataframe()
 

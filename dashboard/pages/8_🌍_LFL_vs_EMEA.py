@@ -84,28 +84,40 @@ st.caption(
     "Coin bas-droit = spécialités EMEA absentes en LFL."
 )
 
-scatter_df = both.copy()
-fig = px.scatter(
-    scatter_df,
-    x="pr_lfl",
-    y="pr_emea",
-    text="champion",
-    size="wr_lfl",
-    color="wr_diff",
-    color_continuous_scale="RdYlGn",
-    color_continuous_midpoint=0,
-    labels={
-        "pr_lfl": "Pick rate LFL (%)",
-        "pr_emea": "Pick rate EMEA (%)",
-        "wr_diff": "Écart WR (LFL − EMEA)",
-    },
-    hover_data={"wr_lfl": True, "wr_emea": True, "picks_lfl": True, "picks_emea": True},
-)
-fig.update_traces(textposition="top center", marker={"sizemin": 6})
-fig.add_hline(y=scatter_df["pr_emea"].mean(), line_dash="dot", line_color="gray", opacity=0.5)
-fig.add_vline(x=scatter_df["pr_lfl"].mean(), line_dash="dot", line_color="gray", opacity=0.5)
-fig.update_layout(height=500)
-st.plotly_chart(fig, width="stretch")
+if both.empty:
+    st.info("Aucun champion commun entre LFL et EMEA Masters avec ce seuil de picks.")
+else:
+    scatter_df = both.copy()
+    # size doit être > 0 pour plotly — on remplace les 0 par un minimum
+    scatter_df["size_val"] = scatter_df["wr_lfl"].clip(lower=1)
+    fig = px.scatter(
+        scatter_df,
+        x="pr_lfl",
+        y="pr_emea",
+        text="champion",
+        size="size_val",
+        color="wr_diff",
+        color_continuous_scale="RdYlGn",
+        color_continuous_midpoint=0,
+        labels={
+            "pr_lfl": "Pick rate LFL (%)",
+            "pr_emea": "Pick rate EMEA (%)",
+            "wr_diff": "Écart WR (LFL − EMEA)",
+            "size_val": "Win rate LFL (%)",
+        },
+        hover_data={
+            "wr_lfl": True,
+            "wr_emea": True,
+            "picks_lfl": True,
+            "picks_emea": True,
+            "size_val": False,
+        },
+    )
+    fig.update_traces(textposition="top center", marker={"sizemin": 6})
+    fig.add_hline(y=scatter_df["pr_emea"].mean(), line_dash="dot", line_color="gray", opacity=0.5)
+    fig.add_vline(x=scatter_df["pr_lfl"].mean(), line_dash="dot", line_color="gray", opacity=0.5)
+    fig.update_layout(height=500)
+    st.plotly_chart(fig, width="stretch")
 
 st.markdown("---")
 

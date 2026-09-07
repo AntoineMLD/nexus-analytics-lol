@@ -64,14 +64,24 @@ st.caption(
 if over.empty:
     st.info("Aucun champion ne dépasse le seuil sur ces patches.")
 else:
+    over_agg = (
+        over.groupby("champion")
+        .agg(
+            deviation=("deviation", "mean"),
+            win_rate_pct=("win_rate_pct", "mean"),
+            picks=("picks", "sum"),
+        )
+        .reset_index()
+        .sort_values("deviation", ascending=False)
+    )
     fig_over = px.bar(
-        over.sort_values("deviation", ascending=False),
+        over_agg,
         x="champion",
         y="deviation",
         color="win_rate_pct",
         color_continuous_scale="Greens",
         text="win_rate_pct",
-        hover_data={"picks": True, "patch": True, "avg_wr_patch": True},
+        hover_data={"picks": True},
         labels={
             "champion": "Champion",
             "deviation": "Écart vs moyenne patch (%)",
@@ -92,15 +102,24 @@ st.caption(
 if under.empty:
     st.info("Aucun champion ne descend sous le seuil sur ces patches.")
 else:
-    under_sorted = under.sort_values("deviation")
+    under_agg = (
+        under.groupby("champion")
+        .agg(
+            deviation=("deviation", "mean"),
+            win_rate_pct=("win_rate_pct", "mean"),
+            picks=("picks", "sum"),
+        )
+        .reset_index()
+        .sort_values("deviation")
+    )
     fig_under = px.bar(
-        under_sorted,
+        under_agg,
         x="champion",
         y="deviation",
         color="win_rate_pct",
         color_continuous_scale="Reds_r",
         text="win_rate_pct",
-        hover_data={"picks": True, "patch": True, "avg_wr_patch": True},
+        hover_data={"picks": True},
         labels={
             "champion": "Champion",
             "deviation": "Écart vs moyenne patch (%)",
