@@ -4,11 +4,18 @@ import plotly.express as px
 import streamlit as st
 
 from dashboard.queries import fetch_team_draft, fetch_teams
+from dashboard.utils import question_metier
 
 st.set_page_config(page_title="Drafts — Nexus Analytics", page_icon="⚔️", layout="wide")
 
 st.title("⚔️ Historique de draft")
 st.caption("Picks et bans par équipe — toutes saisons LFL")
+
+question_metier(
+    "Quelles sont les 5 dernières compositions jouées par notre prochain adversaire cette saison "
+    "— quels champions pick-t-il le plus souvent et dans quel ordre ?",
+    "Yasmine Karim — Analyste senior (§Besoins fonctionnels)",
+)
 
 # ─── Filtres ────────────────────────────────────────────────────────────────
 

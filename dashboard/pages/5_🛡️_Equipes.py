@@ -3,10 +3,18 @@
 import plotly.express as px
 import streamlit as st
 
+from dashboard.utils import question_metier
+
 st.set_page_config(page_title="Équipes — Nexus Analytics", page_icon="🛡️", layout="wide")
 
 st.title("🛡️ Équipes LFL")
 st.caption("Performances par équipe — win rate, gold diff, durée moyenne des parties")
+
+question_metier(
+    "Quelles sont les performances historiques de chaque équipe LFL cette saison "
+    "— win rate, avantage gold moyen, durée des matchs ?",
+    "Thomas Bourgeois — Chargé clients (§Retours clients)",
+)
 
 
 @st.cache_data(ttl=600, show_spinner=False)

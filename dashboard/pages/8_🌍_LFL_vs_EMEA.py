@@ -13,6 +13,7 @@ import plotly.express as px
 import streamlit as st
 
 from dashboard.queries import fetch_meta_by_competition
+from dashboard.utils import question_metier
 
 st.set_page_config(page_title="LFL vs EMEA — Nexus Analytics", page_icon="🌍", layout="wide")
 
@@ -20,6 +21,12 @@ st.title("🌍 LFL vs EMEA Masters")
 st.caption(
     "Comparaison des métas entre la LFL et l'EMEA Masters "
     "— quels champions émergent en LFL avant d'apparaître en EMEA ?"
+)
+
+question_metier(
+    "Quels champions émergent en LFL avant d'apparaître en EMEA Masters "
+    "— comment calibrer la préparation avant les qualifications EMEA ?",
+    "Yasmine Karim — Analyste senior (§Attentes) + Thomas Bourgeois (§Retours clients EMEA)",
 )
 
 # ─── Chargement ──────────────────────────────────────────────────────────────

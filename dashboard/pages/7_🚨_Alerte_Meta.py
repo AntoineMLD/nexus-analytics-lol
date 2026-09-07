@@ -8,6 +8,7 @@ import plotly.express as px
 import streamlit as st
 
 from dashboard.queries import fetch_meta_alerts
+from dashboard.utils import question_metier
 
 st.set_page_config(page_title="Alerte Méta — Nexus Analytics", page_icon="🚨", layout="wide")
 
@@ -15,6 +16,12 @@ st.title("🚨 Alerte Méta")
 st.caption(
     "Champions avec un winrate anormalement haut ou bas sur les 2 derniers patches "
     "— signal d'alerte pour la préparation de matchs."
+)
+
+question_metier(
+    "Quel champion a un win rate anormalement haut ou bas sur les 2 derniers patches "
+    "— y a-t-il des picks à prioriser ou à éviter absolument en draft cette semaine ?",
+    "Thomas Bourgeois — Chargé clients (§Vision)",
 )
 
 # ─── Paramètres ──────────────────────────────────────────────────────────────

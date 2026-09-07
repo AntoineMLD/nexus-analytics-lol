@@ -8,11 +8,18 @@ from dashboard.queries import (
     fetch_player_names,
     fetch_player_stats_by_name,
 )
+from dashboard.utils import question_metier
 
 st.set_page_config(page_title="Profil Joueur — Nexus Analytics", page_icon="🔍", layout="wide")
 
 st.title("🔍 Profil joueur")
 st.caption("Pool de champions, statistiques de carrière et équipes jouées")
+
+question_metier(
+    "Quel est le profil champion d'un joueur adverse "
+    "— quels sont ses picks de prédilection, son rôle principal et ses statistiques clés ?",
+    "Thomas Bourgeois — Chargé clients (§Besoins non exprimés)",
+)
 
 # ─── Sélecteur joueur ────────────────────────────────────────────────────────
 

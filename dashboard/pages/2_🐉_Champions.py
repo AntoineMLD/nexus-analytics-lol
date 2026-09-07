@@ -4,11 +4,18 @@ import plotly.express as px
 import streamlit as st
 
 from dashboard.queries import fetch_champions, fetch_seasons
+from dashboard.utils import question_metier
 
 st.set_page_config(page_title="Champions — Nexus Analytics", page_icon="🐉", layout="wide")
 
 st.title("🐉 Champions LFL")
 st.caption("Pick rates, win rates et distribution par rôle — toutes saisons")
+
+question_metier(
+    "Quels champions sont les plus joués en LFL et quels sont leurs win rates "
+    "— par saison, par rôle et par patch ?",
+    "Brief §3.2 — tendances méta par patch",
+)
 
 # ─── Filtres ────────────────────────────────────────────────────────────────
 

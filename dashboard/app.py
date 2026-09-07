@@ -12,6 +12,7 @@ Variables d'environnement requises (idem pipeline) :
 import streamlit as st
 
 from dashboard.queries import fetch_kpi_summary
+from dashboard.utils import question_metier
 
 st.set_page_config(
     page_title="Nexus Analytics — LFL",
@@ -22,6 +23,12 @@ st.set_page_config(
 
 st.title("🎮 Nexus Analytics — La Ligue Française")
 st.caption("Données historiques LFL (D1 + D2) — 2020 à 2026 — Source : Leaguepedia")
+
+question_metier(
+    "Combien de matchs, joueurs, patches et tournois sont disponibles dans la base "
+    "— l'entrepôt est-il à jour pour produire les rapports de cette semaine ?",
+    "Marc Delacroix — Directeur général",
+)
 
 st.markdown("---")
 

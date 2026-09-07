@@ -4,11 +4,18 @@ import plotly.express as px
 import streamlit as st
 
 from dashboard.queries import fetch_players, fetch_seasons
+from dashboard.utils import question_metier
 
 st.set_page_config(page_title="Joueurs — Nexus Analytics", page_icon="🏆", layout="wide")
 
 st.title("🏆 Joueurs LFL")
 st.caption("Statistiques agrégées sur toute la carrière LFL (D1 + D2)")
+
+question_metier(
+    "Quels sont les résultats et statistiques individuelles des joueurs LFL "
+    "— qui sont les joueurs les plus performants cette saison, dans quelle équipe évoluent-ils ?",
+    "Brief §3.2 + Yasmine Karim — Analyste senior",
+)
 
 # ─── Filtres ────────────────────────────────────────────────────────────────
 

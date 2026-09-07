@@ -4,11 +4,18 @@ import plotly.express as px
 import streamlit as st
 
 from dashboard.queries import fetch_meta_by_patch, fetch_patches
+from dashboard.utils import question_metier
 
 st.set_page_config(page_title="Méta — Nexus Analytics", page_icon="📈", layout="wide")
 
 st.title("📈 Tendances méta")
 st.caption("Pick rate et win rate par champion et par patch LFL")
+
+question_metier(
+    "Quel est le pick rate, ban rate et win rate par champion sur les 3 derniers patches "
+    "— la méta a-t-elle changé depuis le dernier patch ?",
+    "Yasmine Karim — Analyste senior (§Besoins fonctionnels)",
+)
 
 # ─── Sélecteur de patch ─────────────────────────────────────────────────────
 
