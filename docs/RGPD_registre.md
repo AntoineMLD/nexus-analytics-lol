@@ -8,7 +8,7 @@
 >
 > Responsable du traitement : Antoine MLD
 > Date de création : 2026-07-06
-> Dernière mise à jour : 2026-07-06
+> Dernière mise à jour : 2026-09-07
 
 ---
 
@@ -62,8 +62,8 @@ email, adresse, téléphone).
 
 ### Personnes concernées
 
-Joueurs professionnels de la Ligue Française (LFL) Division 1 et Division 2.
-Nombre estimé : ~200 joueurs actifs sur la période 2019-2026.
+Joueurs professionnels de la Ligue Française (LFL Division 1 et Division 2) et de l'EMEA Masters.
+Nombre total historique : 939 joueurs (2013–2026). Nombre actifs par saison : ~80–120.
 
 ### Finalité du traitement
 

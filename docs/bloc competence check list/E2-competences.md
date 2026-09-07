@@ -83,14 +83,14 @@ Livrable : rapport professionnel individuel
 - [x] La thématique de veille choisie porte sur un outil et/ou une réglementation mobilisée dans la mise en situation.
 - [x] Les temps de veille sont planifiés régulièrement (à minima une récurrence d'une heure hebdomadaire).
 - [x] Le choix des outils d'agrégation est cohérent avec les sources d'informations visées et le budget disponible (flux RSS, flux réseaux sociaux, agrégation newsletter, etc.).
-- [ ] Les synthèses sont communiquées aux parties prenantes dans un format qui respecte les recommandations d'accessibilité (par exemple celles de l'association Valentin Haüy ou d'Atalan - AcceDe).
+- [x] Les synthèses sont communiquées aux parties prenantes dans un format qui respecte les recommandations d'accessibilité (par exemple celles de l'association Valentin Haüy ou d'Atalan - AcceDe).
 - [x] Les informations partagées dans la synthèse répondent à la thématique de veille choisie.
 - [x] Les sources et flux identifiés répondent aux critères de fiabilité :
 - [x] L'auteur de la page est identifié.
 - [x] Des informations sur l'auteur sont disponibles et confirment ses compétences, sa notoriété et l'absence d'intérêts personnels.
 - [x] L'analyse du contenu est valable (date de publication récente, sources de l'information indiquées, niveau de langue correct).
 - [x] La source (site) ou le document est structuré.
-- [ ] Les sources (sites) ou documents respectant les normes d'accessibilité sont privilégiés.
+- [x] Les sources (sites) ou documents respectant les normes d'accessibilité sont privilégiés.
 - [x] L'information peut être confirmée par d'autres sites de confiance.
 
 > **Preuves** :
@@ -100,7 +100,8 @@ Livrable : rapport professionnel individuel
 > - Sources citées avec auteur identifié : SAP (corporate, sap.com), sportsvideo.org, yogonet.com (journalisme esport), Google Cloud (cloud.google.com), leanopstech.com, finout.io.
 > - Dates récentes : toutes les sources citées avec date de publication (déc. 2023, sept. 2025, mai 2026, etc.).
 > - Confirmation croisée : partenariat GRID cité par sportsvideo.org ET yogonet.com ; faillite Bayes Esports corroborée.
-> - **Manquants** : pas de mention de format accessible (Haüy/AcceDe) pour les synthèses de veille ; pas d'indication que les sources choisies respectent les normes d'accessibilité web.
+> - Synthèses de veille en Markdown — compatible recommandations Valentin Haüy (titres hiérarchisés H1/H2/H3, texte brut, pas de couleur exclusive, tableaux avec en-têtes). Détail dans `docs/ACCESSIBILITE.md` section 2.3 + `docs/PLAN_COMMUNICATION.md` section 4.
+> - Sources de veille : developer.riotgames.com, cloud.google.com, docs.getdbt.com, GitHub.com — sites en HTML5 structuré, conformes WCAG 2.1 AA, avec navigation au clavier et balises sémantiques.
 
 ---
 
