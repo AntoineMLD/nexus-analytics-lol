@@ -25,13 +25,16 @@ Pipeline de données pour analyser la **LFL (La Ligue Française, D1 + D2) et l'
 ## Architecture GCS (Medallion)
 
 ```
-bronze/oracle_elixir/{year}/{filename}.csv              ← CSV brut Oracle's Elixir
-bronze/leaguepedia/{TableName}/{YYYY-MM-DD}.json        ← NDJSON brut Leaguepedia (9 tables)
-bronze/riot_api/{YYYY-MM-DD}.ndjson                    ← PUUIDs + match IDs ranked EUW
-silver/leaguepedia/lfl_players/{YYYY-MM-DD}.json        ← joueurs LFL + comptes EUW
-silver/leaguepedia/lfl_matches/{YYYY-MM-DD}.json        ← games normalisées (LFL + EMEA Masters)
-silver/leaguepedia/lfl_player_stats/{YYYY-MM-DD}.json   ← stats joueur/game (LFL + EMEA Masters)
-silver/leaguepedia/lfl_drafts/{YYYY-MM-DD}.json         ← picks/bans dépivotés (LFL + EMEA Masters)
+bronze/oracle_elixir/{year}/{filename}.csv                    ← CSV brut Oracle's Elixir
+bronze/leaguepedia/{TableName}/{YYYY-MM-DD}.json              ← NDJSON brut Leaguepedia (9 tables)
+bronze/leaguepedia_wiki/player_ids/{YYYY-MM-DD}.json          ← SoloqueueIds scrapés (wiki)
+bronze/riot_api/{YYYY-MM-DD}.ndjson                           ← PUUIDs + match IDs ranked EUW
+silver/leaguepedia/lfl_players/{YYYY-MM-DD}.json              ← joueurs LFL + comptes EUW (Cargo API + wiki)
+silver/leaguepedia/lfl_matches/{YYYY-MM-DD}.json              ← games normalisées (LFL + EMEA Masters)
+silver/leaguepedia/lfl_player_stats/{YYYY-MM-DD}.json         ← stats joueur/game (LFL + EMEA Masters)
+silver/leaguepedia/lfl_drafts/{YYYY-MM-DD}.json               ← picks/bans dépivotés (LFL + EMEA Masters)
+silver/oracle_elixir/{YYYY-MM-DD}.ndjson                      ← métriques avancées OE (golddiffat15, cspm…)
+silver/riot_api/{YYYY-MM-DD}.ndjson                           ← player_name → puuid
 ```
 
 **Pipeline complet (ordre d'exécution obligatoire) :**
@@ -792,27 +795,34 @@ uv run python -m ingestion.leaguepedia.ingest --table ScoreboardGames
 uv run python -m ingestion.leaguepedia.ingest --table ScoreboardPlayers
 uv run python -m ingestion.leaguepedia.ingest --table PicksAndBansS7
 
-# 3. Silver transforms (LFL + EMEA Masters)
+# 3. Silver transforms
 uv run python -m pipeline.silver_transforms.lfl_matches
 uv run python -m pipeline.silver_transforms.lfl_player_stats
 uv run python -m pipeline.silver_transforms.lfl_drafts
+uv run python -m pipeline.silver_transforms.lfl_players          # Cargo API + wiki Bronze
+uv run python -m pipeline.silver_transforms.oracle_elixir --all-years
+uv run python -m pipeline.silver_transforms.riot_players --date $(date +%Y-%m-%d)
 
 # 4. bq_loader — ⚠️ OBLIGATOIRE avant dbt (GCS Silver → BigQuery raw)
 uv run python -m pipeline.loaders.bq_loader --source leaguepedia --table lfl_matches --date $(date +%Y-%m-%d)
 uv run python -m pipeline.loaders.bq_loader --source leaguepedia --table lfl_player_stats --date $(date +%Y-%m-%d)
 uv run python -m pipeline.loaders.bq_loader --source leaguepedia --table lfl_drafts --date $(date +%Y-%m-%d)
+uv run python -m pipeline.loaders.bq_loader --source leaguepedia --table lfl_players --date $(date +%Y-%m-%d)
+uv run python -m pipeline.loaders.bq_loader --source oracle_elixir --table oracle_elixir --date $(date +%Y-%m-%d)
+uv run python -m pipeline.loaders.bq_loader --source riot_api --table riot_api --date $(date +%Y-%m-%d)
 
-# 5. dbt — rebuild Gold
+# 5. dbt — rebuild Gold (inclut fact_oe_player_game, stg_riot_players, dim_player+puuid)
 uv run --with dbt-bigquery dbt run --project-dir dbt --profiles-dir dbt
 
 # ─── Dashboard ────────────────────────────────────────────────────────────────
 uv run streamlit run dashboard/app.py --server.port 8501 --server.headless true
 # http://localhost:8501
 
-# ─── Autres ingestions ────────────────────────────────────────────────────────
+# ─── Ingestions ponctuelles ───────────────────────────────────────────────────
 uv run python -m ingestion.oracle_elixir.ingest --all
 uv run python -m ingestion.oracle_elixir.ingest --year 2026
-uv run python -m ingestion.riot_api.ingest --silver-date 2026-06-04
+uv run python -m ingestion.riot_api.ingest --silver-date $(date +%Y-%m-%d)
+uv run python -m ingestion.leaguepedia_wiki.ingest                # scraping SoloqueueIds
 
 # ─── API FastAPI ──────────────────────────────────────────────────────────────
 uv run uvicorn api.main:app --reload

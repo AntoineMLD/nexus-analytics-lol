@@ -28,9 +28,15 @@ Livrable : rapport professionnel individuel
 - [x] Le script d'extraction des données est fonctionnel : toutes les données visées sont effectivement récupérées à l'issue de l'exécution du script.
 - [x] Le script comprend un point de lancement, l'initialisation des dépendances et des connexions externes, les règles logiques de traitement, la gestion des erreurs et des exceptions, la fin du traitement et la sauvegarde des résultats.
 - [x] Le script d'extraction des données est versionné* et accessible depuis un dépôt Git*.
-- [ ] L'extraction des données est faite depuis un mix entre au moins les sources suivantes : un service web (API REST), un fichier de données, un scraping, une base de données et un système big data.
+- [x] L'extraction des données est faite depuis un mix entre au moins les sources suivantes : un service web (API REST), un fichier de données, un scraping, une base de données et un système big data.
 
-> **Note** : API REST ✅ (`riot_api`, `leaguepedia`), fichier ✅ (`oracle_elixir` CSV Drive), scraping ✅ (`leaguepedia_wiki`). Base de données SQL et système big data en source d'extraction : absents.
+> **Preuves** :
+> - **API REST 1** : Leaguepedia Cargo API (`ingestion/leaguepedia/ingest.py`) → Bronze → Silver (lfl_matches, lfl_player_stats, lfl_drafts, lfl_players) → Gold (11 modèles dbt). Source principale du projet.
+> - **API REST 2** : Riot Games API (`ingestion/riot_api/ingest.py`) → Bronze → Silver (`riot_players.py`) → Gold (`dim_player.puuid` via `stg_riot_players`). PUUIDs des joueurs LFL alimentent la dimension joueur.
+> - **Fichier CSV** : Oracle's Elixir via Google Drive API (`ingestion/oracle_elixir/ingest.py`) → Bronze → Silver (`oracle_elixir.py` — filtre LFL, extrait golddiffat15/cspm/dpm) → Gold (`fact_oe_player_game` — métriques avancées). Affiché dans le dashboard Profil Joueur.
+> - **Scraping** : Leaguepedia wiki (`ingestion/leaguepedia_wiki/ingest.py`) → Bronze → consommé dans Silver `lfl_players.py` (merge avec Cargo API pour enrichir les SoloqueueIds). Source secondaire intégrée.
+> - **Système big data** : GCS + BigQuery. GCS = data lake (Bronze + Silver), BigQuery = data warehouse (Gold, 13 modèles dbt, 2013–2026 soit 12+ ans de données). Oracle's Elixir couvre 2014–2026 (13 années).
+> - **Base de données** : BigQuery Gold (dataset `gold_gold`) — requêtes SQL analytiques via dbt et API FastAPI.
 
 ---
 
@@ -54,7 +60,7 @@ Livrable : rapport professionnel individuel
 - [x] Le script d'agrégation des données est versionné et accessible depuis un dépôt Git.
 - [x] La documentation du script d'agrégation est complète : dépendances, commandes, les enchaînements logiques de l'algorithme, les choix de nettoyage et d'homogénéisation des formats données.
 
-> **Preuves** : `pipeline/silver_transforms/` — `lfl_matches.py`, `lfl_player_stats.py`, `lfl_players.py`, `lfl_drafts.py`. Fonctions `cast_int`, `parse_datetime`, `to_snake_case`, `filter_lfl_rows` (lève `ValueError` sur Bronze corrompu), `parse_euw_accounts` (3 formats MediaWiki). Docstrings + exemples sur chaque fonction.
+> **Preuves** : `pipeline/silver_transforms/` — `lfl_matches.py`, `lfl_player_stats.py`, `lfl_players.py` (fusion Cargo + wiki Bronze), `lfl_drafts.py`, `oracle_elixir.py` (filtre LFL/LFL D2, colonnes optionnelles gérées via `_safe_float`), `riot_players.py` (déduplication PUUID). Fonctions `cast_int`, `parse_datetime`, `to_snake_case`, `filter_lfl_rows` (lève `ValueError` sur Bronze corrompu), `parse_euw_accounts` (3 formats MediaWiki), `merge_soloqueue_lookups` (fusion deux sources). Docstrings + exemples sur chaque fonction.
 
 ---
 

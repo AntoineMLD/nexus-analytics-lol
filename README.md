@@ -29,10 +29,10 @@ GCS Bronze   ──►   GCS Silver   ──►   BigQuery Gold   ──►   AP
 
 | Couche | Rôle | Technologie | Statut |
 |--------|------|-------------|--------|
-| Bronze | Données brutes, sans transformation | Google Cloud Storage (NDJSON) | ✅ Implémenté |
-| Silver | Nettoyage, typage, filtrage LFL + EMEA Masters | Python → Google Cloud Storage | ✅ Implémenté |
-| Gold | Agrégats métier, 11 modèles dimensionnels | BigQuery + dbt | ✅ Opérationnel |
-| Dashboard | Visualisation interactive — 8 pages métier | Streamlit | ✅ Opérationnel |
+| Bronze | Données brutes, 4 sources (Leaguepedia, OE, Riot, Wiki) | Google Cloud Storage (NDJSON/CSV) | ✅ Implémenté |
+| Silver | Nettoyage, filtrage LFL + EMEA Masters, 6 transforms | Python → Google Cloud Storage | ✅ Implémenté |
+| Gold | 13 modèles dbt — dont fact_oe_player_game (OE) et dim_player+puuid (Riot) | BigQuery + dbt | ✅ Opérationnel |
+| Dashboard | Visualisation interactive — 8 pages métier + métriques avancées OE | Streamlit | ✅ Opérationnel |
 | API | Exposition des données Gold | FastAPI | ✅ Opérationnel |
 
 ---
@@ -256,15 +256,17 @@ uv run python -m ingestion.riot_api.ingest
 ## Lancer les transforms Silver
 
 ```bash
-# Matchs LFL (ScoreboardGames Bronze → Silver)
-uv run python -m pipeline.silver_transforms.lfl_matches --date 2026-06-07
+# Leaguepedia (matchs, stats, drafts, joueurs)
+uv run python -m pipeline.silver_transforms.lfl_matches
+uv run python -m pipeline.silver_transforms.lfl_player_stats
+uv run python -m pipeline.silver_transforms.lfl_drafts
+uv run python -m pipeline.silver_transforms.lfl_players     # Cargo API + wiki Bronze (merge)
 
-# Stats joueurs LFL (ScoreboardPlayers Bronze → Silver)
-uv run python -m pipeline.silver_transforms.lfl_player_stats \
-  --date 2026-07-06 --tournaments-date 2026-06-04
+# Oracle's Elixir — toutes les années disponibles en Bronze
+uv run python -m pipeline.silver_transforms.oracle_elixir --all-years
 
-# Joueurs LFL + comptes EUW (Players + TournamentRosters Bronze → Silver)
-uv run python -m pipeline.silver_transforms.lfl_players --date 2026-06-04
+# Riot API — player → PUUID (remplacer la date par celle du fichier bronze/riot_api/)
+uv run python -m pipeline.silver_transforms.riot_players --date $(date +%Y-%m-%d)
 ```
 
 ---
@@ -273,16 +275,14 @@ uv run python -m pipeline.silver_transforms.lfl_players --date 2026-06-04
 
 ```bash
 # ⚠️ bq_loader est obligatoire avant dbt — il charge GCS Silver dans BigQuery raw
-uv run python -m pipeline.loaders.bq_loader \
-  --source leaguepedia --table lfl_matches --date 2026-09-07
+uv run python -m pipeline.loaders.bq_loader --source leaguepedia --table lfl_matches --date $(date +%Y-%m-%d)
+uv run python -m pipeline.loaders.bq_loader --source leaguepedia --table lfl_player_stats --date $(date +%Y-%m-%d)
+uv run python -m pipeline.loaders.bq_loader --source leaguepedia --table lfl_drafts --date $(date +%Y-%m-%d)
+uv run python -m pipeline.loaders.bq_loader --source leaguepedia --table lfl_players --date $(date +%Y-%m-%d)
+uv run python -m pipeline.loaders.bq_loader --source oracle_elixir --table oracle_elixir --date $(date +%Y-%m-%d)
+uv run python -m pipeline.loaders.bq_loader --source riot_api --table riot_api --date $(date +%Y-%m-%d)
 
-uv run python -m pipeline.loaders.bq_loader \
-  --source leaguepedia --table lfl_player_stats --date 2026-09-07
-
-uv run python -m pipeline.loaders.bq_loader \
-  --source leaguepedia --table lfl_drafts --date 2026-09-07
-
-# dbt rebuild Gold (11 modèles)
+# dbt rebuild Gold (13 modèles — dont fact_oe_player_game et dim_player+puuid)
 uv run --with dbt-bigquery dbt run --project-dir dbt --profiles-dir dbt
 uv run --with dbt-bigquery dbt test --project-dir dbt --profiles-dir dbt
 ```

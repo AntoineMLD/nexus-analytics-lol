@@ -27,6 +27,7 @@
 ```
 Sources externes
   ├── Leaguepedia Cargo API    → bronze/leaguepedia/{Table}/{date}.json
+  ├── Leaguepedia Wiki scraping → bronze/leaguepedia_wiki/player_ids/{date}.json
   ├── Oracle's Elixir (CSV)    → bronze/oracle_elixir/{year}/{file}.csv
   └── Riot Games API           → bronze/riot_api/{date}.ndjson
 
@@ -38,17 +39,32 @@ GCS Bronze (données brutes, NDJSON / CSV)
         ▼
 
 GCS Silver (données normalisées, NDJSON)
+  ├── silver/leaguepedia/lfl_matches/          ← Leaguepedia Cargo
+  ├── silver/leaguepedia/lfl_player_stats/     ← Leaguepedia Cargo
+  ├── silver/leaguepedia/lfl_drafts/           ← Leaguepedia Cargo
+  ├── silver/leaguepedia/lfl_players/          ← Cargo API + Wiki (merge)
+  ├── silver/oracle_elixir/                    ← Oracle's Elixir (golddiffat15, cspm…)
+  └── silver/riot_api/                         ← Riot API (player_name → puuid)
+
         │ pipeline/loaders/bq_loader.py (WRITE_TRUNCATE)
         ▼
 
 BigQuery raw (tables sources pour dbt)
-        │ dbt run (SQL)
+
+        │ dbt run (SQL) — 13 modèles
         ▼
 
 BigQuery gold_gold (modèles dimensionnels)
+  ├── dim_player       (+ puuid depuis Riot API)
+  ├── dim_team, dim_champion, dim_patch
+  ├── dim_player_current_team  (SCD2)
+  ├── fact_player_game         (Leaguepedia)
+  ├── fact_oe_player_game      (Oracle's Elixir — golddiffat15, cspm, dpm)
+  ├── fact_meta_trend
+  └── fact_draft
         │
         ├── API FastAPI (/players, /matches, /stats)
-        └── Dashboard Streamlit (8 pages)
+        └── Dashboard Streamlit (8 pages — dont Profil Joueur avec métriques OE)
 ```
 
 | Couche | Stockage | Format | Rôle |
