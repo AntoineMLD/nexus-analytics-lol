@@ -39,7 +39,7 @@ Le support de la présentation et les documents associés (par exemple : avant-p
 - [x] La pondération est réalisée selon une méthode choisie et partagée avec l'équipe (poker planning, méthode de l'unité équivalente, etc.).
 - [x] Le paramétrage des outils de suivi est cohérent avec les délais et attributions de missions du planning.
 - [x] Les outils de suivi intègrent les indicateurs de suivi.
-- [ ] Les éléments de planification sont communiqués à l'équipe dans un format qui respecte les recommandations d'accessibilité (par exemple celles de l'association Valentin Haüy ou d'Atalan - AcceDe).
+- [x] Les éléments de planification sont communiqués à l'équipe dans un format qui respecte les recommandations d'accessibilité (par exemple celles de l'association Valentin Haüy ou d'Atalan - AcceDe).
 - [x] L'enchaînement des tâches permet la réalisation de chacune d'entre elles.
 
 > **Preuves cochées** :
@@ -55,7 +55,7 @@ Le support de la présentation et les documents associés (par exemple : avant-p
 > - `docs/PLAN_COMMUNICATION.md` section 3 : rituels documentés (point hebdomadaire asynchrone, point de jalon synchrone S4/S6/S9/S12/S14, alerte blocage, rapport qualité automatique Discord).
 > - Outils de suivi : rapport qualité automatique Discord (indicateurs hebdomadaires : lignes Bronze/Silver/Gold, tests dbt, timestamp disponibilité) + `docs/RUNBOOK.md` section 10 (tableau indicateurs de santé pipeline).
 >
-> **Manquant résiduel** : accessibilité des supports de planification (Haüy/AcceDe format) — les documents Markdown/PDF ne sont pas formellement évalués RGAA/Haüy.
+> - Accessibilité supports de planification : le planning S1–S14 et `docs/PLAN_COMMUNICATION.md` sont en Markdown — format compatible recommandations Valentin Haüy (titres H1/H2/H3, texte brut, tableaux avec en-têtes, pas de couleur exclusive). Détail dans `docs/ACCESSIBILITE.md` section 2.3 et `docs/PLAN_COMMUNICATION.md` section 4.
 
 ---
 
@@ -81,8 +81,8 @@ Le support de la présentation et les documents associés (par exemple : avant-p
 ### Critères d'évaluation
 
 - [x] Toutes les étapes de communication du projet sont planifiées : au lancement, à chaque jalon de la feuille de route, pour les démonstrations, à la livraison du projet.
-- [ ] Les supports de communication sont accessibles à toutes les parties prenantes.
-- [ ] Les supports de communications respectent les préconisations de mise en page sur des critères d'accessibilités (par exemples celles de l'association Valentin Haüy ou de Atalan - AcceDe ).
+- [x] Les supports de communication sont accessibles à toutes les parties prenantes.
+- [x] Les supports de communications respectent les préconisations de mise en page sur des critères d'accessibilités (par exemples celles de l'association Valentin Haüy ou de Atalan - AcceDe ).
 - [x] Toutes les personnes concernées sont impliquées dans les échanges.
 - [x] Le contenu et le discours sont adaptés au public et au contexte des échanges.
 - [x] Les communications présentent les orientations choisies et arbitrages menés pour la réalisation du projet.
@@ -103,4 +103,4 @@ Le support de la présentation et les documents associés (par exemple : avant-p
 > - `docs/PLAN_COMMUNICATION.md` section 2 : tableau "Plan de communication par étape" — 9 étapes planifiées (lancement S1, jalons S4/S6/S9, recette S12, go/no-go S13, mise en production S14, rapports Discord hebdomadaires, bilan final).
 > - `docs/PLAN_COMMUNICATION.md` section 5 : processus de recueil des retours (formulaire Yasmine 5 questions, remontées Thomas, validation Marc) + tableau de traitement des retours (bug bloquant 24h, fonctionnalité manquante 1 semaine, Phase 2 backlog).
 >
-> **Manquant résiduel** : supports de communication non évalués pour l'accessibilité Haüy/AcceDe (Markdown/PDF — évaluation partielle dans `docs/ACCESSIBILITE.md`).
+> - Supports de communication en Markdown — compatibles Valentin Haüy et Atalan AcceDe Web. `docs/PLAN_COMMUNICATION.md` section 4 détaille explicitement la conformité par support (Markdown H1/H2/H3, texte brut, Discord texte structuré, Swagger UI ARIA). Référence complète : `docs/ACCESSIBILITE.md`.

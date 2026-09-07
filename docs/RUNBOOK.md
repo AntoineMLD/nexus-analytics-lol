@@ -18,7 +18,8 @@
 7. [Gestion des accès IAM — groupes et droits](#7-gestion-des-accès-iam)
 8. [Procédure de mise à jour des règles d'accès](#8-procédure-de-mise-à-jour-des-règles-daccès)
 9. [Backup et restauration](#9-backup-et-restauration)
-10. [Indicateurs de santé du pipeline](#10-indicateurs-de-santé-du-pipeline)
+10. [SLA — Niveaux de service](#10-sla--niveaux-de-service)
+11. [Indicateurs de santé du pipeline](#11-indicateurs-de-santé-du-pipeline)
 
 ---
 
@@ -261,21 +262,53 @@ gcloud iam service-accounts keys create /tmp/nexus-ingestion-key.json \
 
 ## 9. Backup et restauration
 
-### Stratégie de backup actuelle
+### Stratégie de backup
 
-| Couche | Backup | Rétention |
-|--------|--------|-----------|
-| Bronze GCS | Pas de backup distinct — les données sont réingérables depuis les sources (Leaguepedia, Oracle's Elixir) | 90 jours Standard + Coldline jusqu'à 365 jours |
-| Silver GCS | Pas de backup distinct — régénérable depuis le Bronze | Durée du projet |
-| Gold BigQuery | BigQuery snaphots activés par défaut (7 jours rolling) — restauration via `bq cp` | 7 jours |
+| Couche | Stratégie | Rétention | Fréquence |
+|--------|-----------|-----------|-----------|
+| Bronze GCS | Réingestion depuis source (Leaguepedia/OE) — pas de backup distinct nécessaire | 90j Standard → Coldline → 365j | À la demande |
+| Silver GCS | Régénérable depuis Bronze via `run_pipeline --skip-ingest` — pas de backup distinct | Durée projet | À la demande |
+| Gold BigQuery | Snapshots temporels natifs BigQuery (7 jours rolling) | 7 jours | Automatique (BigQuery) |
+| Gold BigQuery | Export GCS longue durée (`bq extract`) — backup complet mensuel | 12 mois dans GCS | Mensuel (manuel) |
 
-### Restaurer une table BigQuery depuis un snapshot
+### Backup complet Gold — export GCS mensuel
+
+```bash
+# Exporter toutes les tables Gold vers GCS (à faire le 1er de chaque mois)
+PROJECT=$(gcloud config get-value project)
+DATE=$(date +%Y-%m)
+BUCKET="gs://nexus-analytics-bucket"
+
+for TABLE in fact_player_game fact_meta_trend fact_draft dim_player dim_team dim_champion dim_patch dim_player_current_team; do
+  bq extract \
+    --destination_format NEWLINE_DELIMITED_JSON \
+    --compression GZIP \
+    "${PROJECT}:gold_gold.${TABLE}" \
+    "${BUCKET}/backups/gold/${DATE}/${TABLE}/*.json.gz"
+  echo "✅ Exporté : ${TABLE}"
+done
+```
+
+**Résultat** : fichiers NDJSON compressés dans `gs://nexus-analytics-bucket/backups/gold/{YYYY-MM}/`.
+
+### Restaurer une table BigQuery depuis un snapshot temporel (< 7 jours)
 
 ```bash
 # Restaurer fact_player_game telle qu'elle était il y a 24 heures
 bq cp \
   "gold_gold.fact_player_game@-86400000" \
   gold_gold.fact_player_game_backup
+```
+
+### Restaurer depuis l'export GCS (> 7 jours)
+
+```bash
+# Recharger fact_player_game depuis le backup mensuel
+bq load \
+  --source_format NEWLINE_DELIMITED_JSON \
+  --autodetect \
+  gold_gold.fact_player_game \
+  "gs://nexus-analytics-bucket/backups/gold/2026-08/fact_player_game/*.json.gz"
 ```
 
 ### Régénérer le Silver depuis le Bronze
@@ -292,20 +325,56 @@ uv run python -m pipeline.orchestration.run_pipeline --skip-ingest --date YYYY-M
 
 ---
 
-## 10. Indicateurs de santé du pipeline
+## 10. SLA — Niveaux de service
+
+> Les SLA (Service Level Agreements) définissent les engagements de disponibilité et de performance
+> du pipeline et de l'API. Répond au critère C16 (gestion entrepôt — indicateurs de service).
+
+### SLA pipeline de données
+
+| Service | Engagement | Mesure | Action si dépassé |
+|---------|-----------|--------|-------------------|
+| **Disponibilité données Gold** | Données à jour disponibles avant 10h00 le lundi | Timestamp dernière mise à jour `fact_player_game` | Alerte Discord automatique + run manuel |
+| **Durée d'exécution pipeline complet** | < 4 heures (ingestion + Silver + bq_loader + dbt) | Timestamp début/fin dans logs Discord | Investiguer étape bloquante via logs |
+| **Fraîcheur Bronze Leaguepedia** | Données du split en cours disponibles sous 24h après fin de journée de match | Date du dernier `ScoreboardGames` Bronze | Réingestion manuelle si écart > 48h |
+| **Fiabilité des tests dbt** | 100% des tests `dbt test` passent à chaque run | Rapport dbt | Blocage livraison Gold — corriger avant diffusion |
+
+### SLA API FastAPI
+
+| Endpoint | Latence maximale | Disponibilité | Note |
+|---------|-----------------|---------------|------|
+| `GET /health` | < 500 ms | 99% (Cloud Run) | Pas de requête BigQuery |
+| `GET /players` | < 5 secondes | 99% | Requête BigQuery + cold start Cloud Run éventuel |
+| `GET /matches` | < 5 secondes | 99% | Idem |
+| `GET /meta/champion-stats` | < 10 secondes | 99% | Agrégation BigQuery — query plus lourde |
+| Cold start Cloud Run | < 10 secondes | — | Premier appel après inactivité |
+
+### Traitement des incidents
+
+| Priorité | Définition | Délai de traitement |
+|----------|-----------|---------------------|
+| **P1 — Bloquant** | Données Gold non disponibles le lundi matin | < 2 heures |
+| **P2 — Dégradé** | Tests dbt partiellement échoués, API lente | < 24 heures |
+| **P3 — Mineur** | Alerte Discord manquante, log incomplet | < 1 semaine |
+
+---
+
+## 11. Indicateurs de santé du pipeline
 
 ### Métriques hebdomadaires
 
 Après chaque run, vérifier les indicateurs suivants via la notification Discord :
 
-| Indicateur | Valeur attendue | Action si hors plage |
-|-----------|----------------|---------------------|
-| Lignes `ScoreboardGames` Bronze | 3 053 ± 20 | Réingérer si < 3 000 |
-| Lignes `ScoreboardPlayers` Bronze | 30 530 ± 200 | Réingérer si < 30 000 |
-| Lignes `lfl_matches` Silver | 3 053 ± 20 | Inspecter filter_lfl_rows |
-| Lignes `fact_player_game` Gold | ~30 000 | Relancer bq_loader + dbt |
+| Indicateur | Valeur attendue (sept. 2026) | Action si hors plage |
+|-----------|------------------------------|---------------------|
+| Lignes `ScoreboardGames` Bronze | ≥ 4 500 | Réingérer Tournaments puis ScoreboardGames |
+| Lignes `ScoreboardPlayers` Bronze | ≥ 32 000 | Réingérer ScoreboardPlayers |
+| Lignes `lfl_matches` Silver | ≥ 4 500 | Inspecter filter_lfl_rows (89 OverviewPages) |
+| Lignes `lfl_player_stats` Silver | ≥ 32 000 | Relancer lfl_player_stats transform |
+| Lignes `fact_player_game` Gold | ≥ 32 700 | Relancer bq_loader + dbt run |
+| Lignes `fact_meta_trend` Gold | ≥ 7 000 | Relancer bq_loader + dbt run |
 | Tests dbt passés | 100% | Investiguer les tests échoués |
-| Timestamp disponibilité données | Avant 10h00 le lundi | Alerte automatique envoyée |
+| Timestamp disponibilité données | Avant 10h00 le lundi | Alerte automatique Discord envoyée |
 
 ### Requête de monitoring mensuel (volume BigQuery)
 

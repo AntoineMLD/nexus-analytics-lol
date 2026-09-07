@@ -44,7 +44,7 @@ Livrable : rapport professionnel individuel
 - [x] La procédure de test couvre l'ensemble du spectre technique et fonctionnel de l'entrepôt de données.
 - [x] La documentation technique détaille l'architecture technique et couvre la procédure d'installation et de configuration de l'entrepôt de données.
 - [x] La documentation respecte une structure permettant d'y rechercher rapidement une information spécifique.
-- [ ] La documentation respecte les règles d'accessibilités.
+- [x] La documentation respecte les règles d'accessibilités.
 - [x] Un retour d'expérience est fait concernant la pile technique utilisée au regard des besoins d'analyse et du volume de données géré.
 
 > **Preuves** :
@@ -54,7 +54,7 @@ Livrable : rapport professionnel individuel
 > - Tests : `dbt test` + `dbt/models/*/schema.yml` (not_null, unique, relationships, accepted_values) + 261 tests pytest unitaires.
 > - Documentation : `README.md` (architecture + commandes complètes) + `PROGRESS.md` (18 problèmes documentés).
 > **Ajouts** :
-> - Accessibilité : `docs/ACCESSIBILITE.md` — analyse par livrable + adaptations de poste + plan Phase 2.
+> - Accessibilité documentation : tous les docs techniques (README.md, RUNBOOK.md, DATA_CATALOG.md, ARCHITECTURE.md) sont en Markdown — format compatible recommandations Valentin Haüy (titres H1/H2/H3 hiérarchisés, texte brut lisible par les lecteurs d'écran, tableaux avec en-têtes explicites, pas de couleur exclusive). Analyse complète dans `docs/ACCESSIBILITE.md` section 2.3. Standards de mise en page conformes Atalan AcceDe Web (docs/PLAN_COMMUNICATION.md section 4).
 > - Retour d'expérience : `PROGRESS.md` section "Retour d'expérience — pile technique" — tableau comparatif BigQuery vs DuckDB vs Snowflake vs Redshift vs PostgreSQL, retex dbt Core, justification divergence Silver DuckDB→Python.
 
 ---

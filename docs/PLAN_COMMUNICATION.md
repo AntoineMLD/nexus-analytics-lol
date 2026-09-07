@@ -98,8 +98,33 @@
 | Documentation API (Swagger) | Web (`/docs`) | Yasmine, développeurs | localhost:8000/docs |
 | Documentation Postman | Collection JSON | Yasmine | Partagée en S14 |
 | Runbook opérationnel | Markdown (docs/RUNBOOK.md) | Data Engineer | GitHub |
-| Alertes Discord | Texte | Marc, Yasmine | Discord `#nexus-alerts` |
-| Rapports qualité hebdomadaires | Texte automatique | Marc, Yasmine | Discord `#nexus-updates` |
+| Alertes Discord | Texte brut structuré | Marc, Yasmine | Discord `#nexus-alerts` |
+| Rapports qualité hebdomadaires | Texte brut structuré | Marc, Yasmine | Discord `#nexus-updates` |
+
+### Accessibilité des supports de communication
+
+Tous les supports produits dans ce projet respectent les recommandations d'accessibilité
+de l'**association Valentin Haüy** et d'**Atalan AcceDe Web** :
+
+- **Format Markdown** (ce document, RUNBOOK.md, PROGRESS.md, README.md) :
+  - Titres hiérarchisés `H1 / H2 / H3` — structure sémantique lisible par les lecteurs d'écran
+  - Texte brut sans dépendance à la couleur pour transmettre l'information
+  - Tableaux avec en-têtes explicites
+  - Blocs de code délimités (accessibles en texte brut)
+  - Compatible avec les technologies d'assistance (lecteurs d'écran, plages braille)
+
+- **Notifications Discord** :
+  - Texte brut structuré avec émojis en indicateurs non exclusifs (✅ / ❌ accompagnés d'un texte)
+  - Pas d'image ou de graphique sans équivalent textuel
+  - Conforme aux recommandations Discord pour l'accessibilité (texte brut lisible hors rendu)
+
+- **Documentation API (Swagger UI)** :
+  - Navigation au clavier supportée (tabulation)
+  - Attributs ARIA présents sur les éléments interactifs (Swagger UI 4.x)
+  - Limite connue : conformité WCAG 2.1 AA partielle — compensée par l'usage de Postman comme client principal (accessible)
+
+> Référence complète : `docs/ACCESSIBILITE.md` — analyse par livrable, adaptations de poste,
+> conformité RGAA 4.1 et recommandations Atalan AcceDe Web.
 
 ---
 
