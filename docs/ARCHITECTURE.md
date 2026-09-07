@@ -213,6 +213,44 @@ La séparation Bronze/Silver/Gold garantit la traçabilité complète (chaque do
 
 Les données LFL sont publiées après chaque journée de compétition. Il n'existe pas de besoin temps réel chez Nexus Analytics. Un pipeline batch hebdomadaire consomme plusieurs ordres de grandeur d'énergie de moins qu'un pipeline streaming pour le même résultat analytique (choix éco-responsable conforme au RGESN 2024).
 
-### Pourquoi pas un catalogue de données (Dataplex, OpenMetadata) ?
+### Pourquoi pas un catalogue de données outillé ?
 
-Pour un projet mono-équipe avec 4 sources et 10 tables, la complexité d'un outil de catalogue outrepasse le besoin. Le `GLOSSAIRE_METIER.md` et la documentation dbt auto-générée (`dbt docs serve`) remplissent le rôle de catalogue pour ce périmètre. Un outil type Google Dataplex serait à envisager si le projet s'étend à de nouvelles sources ou équipes.
+Trois outils ont été évalués avant de choisir l'approche catalogue retenue.
+
+#### Comparatif outils catalogue
+
+| Critère | Google Cloud Dataplex | OpenMetadata | dbt docs + DATA_CATALOG.md *(retenu)* |
+|---------|----------------------|--------------|---------------------------------------|
+| **Intégration GCS + BigQuery** | Native — scan automatique des assets GCS et BQ | Via connecteurs configurables (non natif) | dbt couvre BigQuery Gold ; DATA_CATALOG.md couvre GCS Bronze/Silver |
+| **Lineage automatique** | Oui — détecte les dépendances entre ressources GCP | Oui — lineage multi-sources | Oui dans dbt (`dbt docs serve` génère le DAG) ; lineage GCS → BQ documenté manuellement dans DATA_CATALOG.md |
+| **Installation** | Managed GCP — activable en 5 min via Terraform | Self-hosted — Docker/Kubernetes requis | Aucune infrastructure supplémentaire — dbt déjà en place |
+| **Coût mensuel** | ~15–50€/mois selon volume scanné (pricing à l'asset) | 0€ (open source) + coût infra serveur (~20€/mois min) | 0€ — dbt Core gratuit, DATA_CATALOG.md statique |
+| **Gouvernance / RGPD** | Tags de sensibilité GCP (PII tagging), DLP intégré | Politiques de données, classification custom | Classification manuelle dans DATA_CATALOG.md (tableau RGPD par colonne) |
+| **Adapté projet mono-équipe** | Surdimensionné — conçu pour des dizaines de datasets | Surdimensionné — conçu pour des équipes data | Adapté — un fichier markdown + `dbt docs serve` |
+| **Courbe d'apprentissage** | Faible (interface GCP) | Élevée (configuration API, connecteurs, auth) | Nulle — déjà maîtrisé |
+| **Mise à jour catalogue** | Automatique (scan planifié) | Semi-automatique (connecteurs) | Manuelle (DATA_CATALOG.md) + automatique pour Gold (dbt docs) |
+
+#### Décision et justification
+
+**Outil retenu : `dbt docs` (Gold) + `docs/DATA_CATALOG.md` (Bronze/Silver)**
+
+Raisons :
+
+1. **Volume et périmètre** : 4 sources, 11 modèles dbt, 1 équipe. Google Dataplex et OpenMetadata sont conçus pour des centaines de datasets et des équipes multi-profils — leur coût opérationnel (humain et financier) dépasse la valeur apportée.
+
+2. **Coût** : le budget Nexus Analytics est de 8€/mois réel vs 300€ alloué. Ajouter Dataplex ajouterait 15–50€/mois pour un gain marginal sur ce périmètre.
+
+3. **Intégration dbt** : `dbt docs serve` génère automatiquement un catalogue interactif de la couche Gold (schémas, descriptions, tests, DAG de lignée) depuis les fichiers `schema.yml` déjà écrits. Ce catalogue est fonctionnel sans configuration supplémentaire.
+
+4. **Couverture Bronze/Silver** : `docs/DATA_CATALOG.md` documente statiquement les 6 sources Bronze et 4 tables Silver avec schéma, volume, classification RGPD et lignée. Mise à jour manuelle à chaque ajout de source.
+
+5. **Évolutivité** : si le projet s'étend à de nouvelles équipes ou à 50+ tables, **Google Cloud Dataplex** serait l'outil recommandé — intégration GCS/BigQuery native, PII tagging automatique, lifecycle management. La migration serait facilitée par la structure déjà en place (metadata GCS, schema.yml dbt).
+
+#### Commande pour générer le catalogue Gold interactif
+
+```bash
+cd dbt
+uv run --with dbt-bigquery dbt docs generate --project-dir . --profiles-dir .
+uv run --with dbt-bigquery dbt docs serve --project-dir . --profiles-dir .
+# http://localhost:8080 — DAG interactif + schémas + descriptions + tests
+```
