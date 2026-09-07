@@ -14,7 +14,7 @@
 | **BC01** C1-C7 — Piloter un projet data | E1, E2, E3 | ✅ **Terminé** | Documents produits et livrés |
 | **BC02** C8-C12 — Collecte, stockage, mise à disposition | E4 | 🟡 **Partiel (~75%)** | Code solide, scraping ✅, FastAPI ✅, dashboard ✅, MERISE ✅, RGPD ✅ |
 | **BC03** C13-C17 — Entrepôt de données | E5, E6 | 🟡 **Partiel (~70%)** | dbt 11 modèles ✅, SCD2 ✅, dim_player_current_team ✅ |
-| **BC04** C18-C21 — Data lake | E7 | 🟡 **Partiel (~40%)** | GCS Medallion documenté ✅, streaming et catalogue absents |
+| **BC04** C18-C21 — Data lake | E7 | 🟡 **Partiel (~65%)** | GCS Medallion ✅, catalogue ✅ `DATA_CATALOG.md`, streaming absent |
 
 ---
 
@@ -235,10 +235,10 @@ mais non formalisé comme tel.
 
 | Compétence | Ce qu'on a | Statut |
 |-----------|-----------|--------|
-| C18 — Architecture data lake | GCS Bronze (raw) + Silver (transformed) = data lake Medallion | 🟡 Partiel (non documenté comme tel) |
-| C19 — Intégrer composants (batch, streaming, catalogue) | Batch ✅ / Streaming ❌ / Catalogue ❌ | 🟡 |
-| C20 — Gérer le catalogue et cycle de vie | `blob.metadata` = proxy très léger / lifecycle Terraform absent | ❌ |
-| C21 — Gouvernance : droits, accès | IAM GCP non configuré / pas de doc des règles d'accès | ❌ |
+| C18 — Architecture data lake | GCS Bronze (raw) + Silver (transformed) = data lake Medallion | ✅ Documenté (`docs/ARCHITECTURE.md`) |
+| C19 — Intégrer composants (batch, streaming, catalogue) | Batch ✅ / Catalogue ✅ `docs/DATA_CATALOG.md` / Streaming ❌ | 🟡 |
+| C20 — Gérer le catalogue et cycle de vie | `docs/DATA_CATALOG.md` (489 lignes) + lifecycle GCS Terraform (Bronze 90j → Coldline) + BQ expiration 24 mois | ✅ 2026-09-07 |
+| C21 — Gouvernance : droits, accès | IAM Terraform (SA nexus-ingestion + nexus-api, moindre privilège) | 🟡 Partiel |
 
 > BC04 n'est probablement pas dans le périmètre immédiat de soutenance. À traiter après BC02/BC03.
 
