@@ -129,6 +129,18 @@ En cas de demande d'exercice des droits :
 4. Recharger BigQuery raw et relancer dbt pour mettre à jour le Gold
 5. Documenter l'opération dans le PROGRESS.md
 
+### Fréquences d'exécution des traitements de conformité
+
+| Traitement de conformité | Type | Fréquence | Déclencheur |
+|--------------------------|------|-----------|-------------|
+| Vérification des données collectées vs minimisation | Manuel | À chaque ingestion (hebdomadaire) | Avant `uv run python -m ingestion.riot_api.ingest` |
+| Purge automatique Bronze → Coldline | Automatisé (Terraform lifecycle) | Continue (90 jours après création de l'objet GCS) | Google Cloud Storage lifecycle policy |
+| Expiration automatique tables BigQuery Gold | Automatisé (Terraform) | Continue (730 jours après création de la table) | BigQuery table expiration |
+| Audit des accès IAM | Manuel | Trimestriel | Revue des comptes de service actifs |
+| Revue du registre des traitements | Manuel | Annuel ou en cas de changement de traitement | Ajout d'une nouvelle source de données |
+| Traitement des demandes d'exercice des droits | Manuel (sur demande) | Dans les 30 jours suivant la réception de la demande | Email du joueur concerné |
+| Vérification des accès BigQuery (INFORMATION_SCHEMA.JOBS) | Manuel | Mensuel | Revue des requêtes exécutées sur les données personnelles |
+
 ---
 
 ## Traitement n°2 — Collecte des Riot IDs publics via scraping wiki

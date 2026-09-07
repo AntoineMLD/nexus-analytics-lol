@@ -1,7 +1,11 @@
 """Orchestration du pipeline Nexus Analytics.
 
 Enchaîne les étapes dans l'ordre :
-  1. Ingestion Bronze (Leaguepedia Cargo API)
+  1. Ingestion Bronze — toutes les sources :
+     a. Leaguepedia Cargo API (9 tables)
+     b. Oracle's Elixir CSV (Google Drive)
+     c. Leaguepedia Wiki scraping (SoloqueueIds)
+     d. Riot API (PUUIDs + match IDs)
   2. Transforms Silver (normalisation + unpivot)
   3. Chargement BigQuery (GCS Silver → BQ raw)
   4. dbt run (Silver raw → Gold)
@@ -21,6 +25,9 @@ Usage :
 
     # Cibler une date spécifique (utile pour un replay)
     uv run python -m pipeline.orchestration.run_pipeline --date 2026-07-01
+
+    # Ingestion Leaguepedia uniquement (pas Oracle/Riot/wiki)
+    uv run python -m pipeline.orchestration.run_pipeline --leaguepedia-only
 """
 
 import argparse
@@ -82,17 +89,63 @@ def _run(cmd: list[str], step_name: str) -> int:
     return result.returncode
 
 
-def run_ingestion() -> bool:
-    """Step 1 — Ingest all Leaguepedia Cargo tables to GCS Bronze.
+def run_ingestion(leaguepedia_only: bool = False) -> bool:
+    """Step 1 — Ingest all Bronze sources to GCS.
 
-    Returns True on success, False on failure.
+    Sources ingested (in order):
+      - Leaguepedia Cargo API (always)
+      - Oracle's Elixir CSV (unless leaguepedia_only)
+      - Leaguepedia Wiki scraping for SoloqueueIds (unless leaguepedia_only)
+      - Riot API for PUUIDs (unless leaguepedia_only, depends on wiki scraping)
+
+    Args:
+        leaguepedia_only: If True, skip Oracle, wiki, and Riot ingestion.
+
+    Returns:
+        True if all requested sources succeed, False if any fails.
     """
     logger.info("=== Step 1/4 : Bronze ingestion ===")
+    success = True
+
+    # 1a — Leaguepedia Cargo API
     code = _run(
         ["uv", "run", "python", "-m", "ingestion.leaguepedia.ingest"],
-        "ingestion",
+        "ingestion:leaguepedia",
     )
-    return code == 0
+    if code != 0:
+        success = False
+
+    if leaguepedia_only:
+        logger.info("--leaguepedia-only flag set, skipping other sources.")
+        return success
+
+    # 1b — Oracle's Elixir CSV
+    code = _run(
+        ["uv", "run", "python", "-m", "ingestion.oracle_elixir.ingest"],
+        "ingestion:oracle_elixir",
+    )
+    if code != 0:
+        success = False
+
+    # 1c — Leaguepedia Wiki scraping (SoloqueueIds)
+    # Depends on Silver lfl_players being present (from a previous run).
+    code = _run(
+        ["uv", "run", "python", "-m", "ingestion.leaguepedia_wiki.ingest"],
+        "ingestion:wiki",
+    )
+    if code != 0:
+        success = False
+
+    # 1d — Riot API (PUUIDs + match IDs)
+    # Depends on Silver lfl_players (EUW accounts) being present.
+    code = _run(
+        ["uv", "run", "python", "-m", "ingestion.riot_api.ingest"],
+        "ingestion:riot_api",
+    )
+    if code != 0:
+        success = False
+
+    return success
 
 
 def run_silver_transforms(date: str | None) -> bool:
@@ -176,6 +229,11 @@ def parse_args() -> argparse.Namespace:
         action="store_true",
         help="Exécuter uniquement dbt run (étape 4). Utile si BQ est déjà à jour.",
     )
+    parser.add_argument(
+        "--leaguepedia-only",
+        action="store_true",
+        help="Ingérer uniquement Leaguepedia Cargo (pas Oracle, wiki, Riot).",
+    )
     return parser.parse_args()
 
 
@@ -195,7 +253,7 @@ def main() -> None:
             failures.append("dbt")
     else:
         if not args.skip_ingest:
-            if not run_ingestion():
+            if not run_ingestion(leaguepedia_only=args.leaguepedia_only):
                 failures.append("ingestion")
 
         # Résoudre la date Bronze une seule fois pour toutes les étapes suivantes.

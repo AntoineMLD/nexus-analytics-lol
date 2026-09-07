@@ -12,8 +12,10 @@ Output: a report that distinguishes "I believe it's complete" from
 
 Usage:
     uv run python -m pipeline.quality_checks.lfl_completeness
+    uv run python -m pipeline.quality_checks.lfl_completeness --date 2026-06-07
 """
 
+import argparse
 import csv
 import io
 import json
@@ -23,16 +25,40 @@ from dataclasses import dataclass, field
 
 from google.cloud import storage
 
-from ingestion.utils import settings
+from ingestion.utils import gcs_client, settings
 
 logging.basicConfig(level=logging.INFO, format="%(levelname)s %(message)s")
 logger = logging.getLogger(__name__)
 
 # ─── Constants ───────────────────────────────────────────────────────────────
 
-SILVER_MATCHES = "silver/leaguepedia/lfl_matches/2026-06-07.json"
-SILVER_PLAYERS = "silver/leaguepedia/lfl_player_stats/2026-06-05.json"
 ORACLE_PREFIX = "bronze/oracle_elixir"
+
+
+def find_latest_silver_date(table: str) -> str:
+    """Return the most recent date available for a Silver table in GCS.
+
+    Args:
+        table: Silver table name (e.g. 'lfl_matches').
+
+    Returns:
+        Date string 'YYYY-MM-DD'.
+
+    Raises:
+        FileNotFoundError: If no Silver file exists for this table.
+    """
+    prefix = f"silver/leaguepedia/{table}/"
+    with gcs_client() as client:
+        blobs = list(client.bucket(settings.gcs_bucket_name).list_blobs(prefix=prefix))
+    if not blobs:
+        raise FileNotFoundError(
+            f"No Silver file found for table '{table}' in gs://{settings.gcs_bucket_name}/{prefix}."
+        )
+    latest = max(blobs, key=lambda b: b.name)
+    date = latest.name.split("/")[-1].replace(".json", "")
+    logger.info("Auto-detected latest Silver date for %s: %s", table, date)
+    return date
+
 
 # Known league format: number of teams → expected regular-season BO1 games
 # (double round-robin = n × (n-1))
@@ -71,15 +97,19 @@ class TournamentStats:
 # ─── Loaders ─────────────────────────────────────────────────────────────────
 
 
-def load_silver_matches(bucket: storage.Bucket) -> list[dict]:
-    logger.info("Loading Silver lfl_matches...")
-    content = bucket.blob(SILVER_MATCHES).download_as_text().strip()
+def load_silver_matches(bucket: storage.Bucket, date: str | None = None) -> list[dict]:
+    resolved = date or find_latest_silver_date("lfl_matches")
+    path = f"silver/leaguepedia/lfl_matches/{resolved}.json"
+    logger.info("Loading Silver lfl_matches from %s...", path)
+    content = bucket.blob(path).download_as_text().strip()
     return [json.loads(line) for line in content.splitlines()]
 
 
-def load_silver_players(bucket: storage.Bucket) -> list[dict]:
-    logger.info("Loading Silver lfl_player_stats...")
-    content = bucket.blob(SILVER_PLAYERS).download_as_text().strip()
+def load_silver_players(bucket: storage.Bucket, date: str | None = None) -> list[dict]:
+    resolved = date or find_latest_silver_date("lfl_player_stats")
+    path = f"silver/leaguepedia/lfl_player_stats/{resolved}.json"
+    logger.info("Loading Silver lfl_player_stats from %s...", path)
+    content = bucket.blob(path).download_as_text().strip()
     return [json.loads(line) for line in content.splitlines()]
 
 
@@ -351,20 +381,22 @@ def print_oracle_crosscheck(
 # ─── Main ─────────────────────────────────────────────────────────────────────
 
 
-def run_checks() -> None:
-    """Run all completeness checks and print a full report."""
-    client = storage.Client()
-    bucket = client.bucket(settings.gcs_bucket_name)
+def run_checks(date: str | None = None) -> None:
+    """Run all completeness checks and print a full report.
 
-    matches = load_silver_matches(bucket)
-    players = load_silver_players(bucket)
-    oracle_data = load_oracle_elixir_lfl(bucket)
+    Args:
+        date: Optional Silver date (YYYY-MM-DD). Auto-detected if None.
+    """
+    with gcs_client() as client:
+        bucket = client.bucket(settings.gcs_bucket_name)
+
+        matches = load_silver_matches(bucket, date)
+        players = load_silver_players(bucket, date)
+        oracle_data = load_oracle_elixir_lfl(bucket)
 
     print()
     print_separator("═")
     print("LFL DATA COMPLETENESS REPORT")
-    print(f"  Silver matches  : {SILVER_MATCHES}")
-    print(f"  Silver players  : {SILVER_PLAYERS}")
     print(f"  Total games     : {len(matches)}")
     print(f"  Total player rows: {len(players)}")
     print_separator("═")
@@ -391,5 +423,18 @@ def run_checks() -> None:
     print_separator("═")
 
 
+def _parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser(
+        description="LFL data completeness checks (Silver vs Oracle's Elixir)."
+    )
+    parser.add_argument(
+        "--date",
+        default=None,
+        help="Silver date to check (YYYY-MM-DD). Auto-detected if omitted.",
+    )
+    return parser.parse_args()
+
+
 if __name__ == "__main__":
-    run_checks()
+    args = _parse_args()
+    run_checks(args.date)

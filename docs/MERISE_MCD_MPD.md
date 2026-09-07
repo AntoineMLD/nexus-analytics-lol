@@ -241,6 +241,29 @@ Granularité : (champion, patch, overview_page). Utilisée par l'endpoint `GET /
 
 ## 4. Justification des choix de modélisation
 
+### Approche bottom-up retenue et justification
+
+L'entrepôt de données a été construit selon une approche **bottom-up** (approche Kimball).
+
+**Définition** : l'approche bottom-up part des besoins d'analyse concrets pour construire les data marts, puis les consolide progressivement en entrepôt global. À l'opposé, l'approche top-down (Inmon) consiste à modéliser l'entrepôt complet en 3NF avant de créer les data marts.
+
+**Justification pour Nexus Analytics :**
+
+| Critère | Bottom-up | Top-down | Choix retenu |
+|---------|-----------|----------|-------------|
+| Volume de données | Faible (3 053 parties, ~30 000 stats) | — | Bottom-up adapté aux petits volumes |
+| Périmètre | Délimité (LFL uniquement) | — | Pas de besoin d'intégrer des dizaines de sources hétérogènes |
+| Délai | 14 semaines | Projet de 6–18 mois typiquement | Bottom-up livrable en 14 semaines |
+| Équipe | 1 data engineer | Nécessite une équipe modélisation dédiée | Solo → bottom-up obligatoire |
+| Besoins utilisateurs | Explicitement identifiés en entretien (pick/ban rates, winrates, scouting) | — | Les data marts correspondent directement aux besoins Yasmine |
+
+La modélisation a commencé par les besoins analytiques de l'analyste senior (Yasmine Karim, entretien du 14 mai 2026) et a produit directement les data marts :
+- `fact_player_game` → répondre à "stats d'un joueur sur la saison"
+- `fact_draft` → répondre à "compositions jouées par une équipe adversaire"
+- `fact_meta_trend` → répondre à "pick/ban rates par champion sur les 3 derniers patches"
+
+---
+
 ### Pourquoi un schéma en étoile ?
 
 Le schéma en étoile est adapté à ce projet car :
