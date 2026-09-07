@@ -35,6 +35,14 @@ if df.empty:
     st.warning("Aucune donnée méta pour cette sélection.")
     st.stop()
 
+# Quand plusieurs patches sont présents, on agrège par champion
+# pour éviter plusieurs barres/points par champion dans les graphiques.
+if patch_filter is None and "patch" in df.columns:
+    total_picks_all = df["picks"].sum()
+    df = df.groupby("champion", as_index=False).agg(picks=("picks", "sum"), wins=("wins", "sum"))
+    df["pick_rate_pct"] = (df["picks"] / total_picks_all * 100).round(2)
+    df["win_rate_pct"] = (df["wins"] / df["picks"] * 100).round(1)
+
 with col_f2:
     min_picks = st.slider(
         "Picks minimum (filtre les champions rares)",
@@ -62,7 +70,7 @@ fig = px.scatter(
     text="champion",
     color="win_rate_pct",
     color_continuous_scale="RdYlGn",
-    hover_data={"champion": True, "picks": True, "wins": True, "patch": True},
+    hover_data={"champion": True, "picks": True, "wins": True},
     labels={
         "pick_rate_pct": "Pick rate (%)",
         "win_rate_pct": "Win rate (%)",
