@@ -13,15 +13,15 @@ indépendamment de toute technologie.
 ### Entités
 
 **JOUEUR**
-Représente un joueur professionnel ayant participé à au moins une partie LFL.
+Représente un joueur professionnel ayant participé à au moins une partie LFL ou EMEA Masters.
 Identifié par son nom de page wiki Leaguepedia (`player_link`).
 
 **EQUIPE**
-Représente une équipe ayant participé au moins à une partie LFL.
+Représente une équipe ayant participé au moins à une partie LFL ou EMEA Masters.
 Identifiée par son nom d'équipe (`team_name`).
 
 **PARTIE**
-Représente une partie individuelle d'un match LFL (une game dans un BO1/BO3/BO5).
+Représente une partie individuelle d'un match LFL ou EMEA Masters (une game dans un BO1/BO3/BO5).
 Identifiée par `game_id` (identifiant Leaguepedia unique).
 
 **MATCH**
@@ -29,8 +29,8 @@ Représente un match complet (série de parties). Identifié par `match_id`.
 Un match contient entre 1 et 5 parties.
 
 **TOURNOI**
-Représente une compétition LFL (split, saison). Identifié par `overview_page`
-(ex: `LFL/2025 Season/Spring Split`).
+Représente une compétition LFL ou EMEA Masters (split, saison). Identifié par `overview_page`
+(ex: `LFL/2025 Season/Spring Split`, `EMEA Masters/2025 Season/Spring`).
 
 ### Associations
 
@@ -251,8 +251,8 @@ L'entrepôt de données a été construit selon une approche **bottom-up** (appr
 
 | Critère | Bottom-up | Top-down | Choix retenu |
 |---------|-----------|----------|-------------|
-| Volume de données | Faible (3 053 parties, ~30 000 stats) | — | Bottom-up adapté aux petits volumes |
-| Périmètre | Délimité (LFL uniquement) | — | Pas de besoin d'intégrer des dizaines de sources hétérogènes |
+| Volume de données | Faible (4 535 parties, ~32 700 stats joueurs) | — | Bottom-up adapté aux petits volumes |
+| Périmètre | Délimité (LFL + EMEA Masters) | — | Pas de besoin d'intégrer des dizaines de sources hétérogènes |
 | Délai | 14 semaines | Projet de 6–18 mois typiquement | Bottom-up livrable en 14 semaines |
 | Équipe | 1 data engineer | Nécessite une équipe modélisation dédiée | Solo → bottom-up obligatoire |
 | Besoins utilisateurs | Explicitement identifiés en entretien (pick/ban rates, winrates, scouting) | — | Les data marts correspondent directement aux besoins Yasmine |
@@ -271,13 +271,19 @@ Le schéma en étoile est adapté à ce projet car :
 - `dim_player` et `dim_team` sont de petites dimensions stables (< 1 000 lignes)
 - BigQuery est optimisé pour les jointures en étoile grâce au stockage en colonnes
 
-### Pourquoi SCD Type 1 (écrasement) ?
+### SCD Type 1 et SCD Type 2 — stratégie mixte
 
-Les dimensions `dim_player` et `dim_team` sont reconstruites intégralement à chaque run dbt
-(WRITE_TRUNCATE). Ce choix est justifié par :
-- Les statistiques sont des agrégats calculés, pas des valeurs historiques
-- Si un joueur change d'équipe, son historique reste dans `fact_player_game` via `team` par partie
-- SCD Type 2 (historisation) ajouterait de la complexité sans valeur ajoutée pour des données de tournoi
+**SCD Type 1 (écrasement)** est appliqué sur `dim_player`, `dim_team`, `dim_champion`, `dim_patch`.
+Ces dimensions sont reconstruites intégralement à chaque run dbt (WRITE_TRUNCATE).
+Justification : les statistiques sont des agrégats calculés sur l'historique complet — elles n'ont
+pas de "valeur à un instant T" pertinente à conserver.
+
+**SCD Type 2 (historisation)** est appliqué sur `dim_player_current_team` via le snapshot dbt
+`snap_player_team` (`dbt/snapshots/snap_player_team.sql`).
+Les changements d'équipe d'un joueur sont historisés avec les colonnes `dbt_valid_from` / `dbt_valid_to`.
+Justification : l'affiliation d'un joueur à une équipe varie significativement au fil des saisons
+(transferts, prêts, montées/descentes D1↔D2). Nexus Analytics a besoin de répondre à "Dans quelle
+équipe jouait ce joueur au 1er mars 2025 ?" — ce que SCD Type 1 ne permet pas.
 
 ### Pourquoi `SAFE_DIVIDE` pour le KDA ?
 

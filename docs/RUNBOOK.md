@@ -83,13 +83,16 @@ bq query --use_legacy_sql=false \
    SELECT 'fact_meta_trend', COUNT(*) FROM gold_gold.fact_meta_trend"
 ```
 
-**Résultats attendus (juillet 2026) :**
+**Résultats attendus (septembre 2026 — LFL + EMEA Masters) :**
 
 | Table | Lignes attendues |
 |-------|-----------------|
-| `fact_player_game` | ~30 000 |
-| `dim_player` | ~800 |
-| `fact_meta_trend` | ~2 000 |
+| `fact_player_game` | ~32 700 |
+| `dim_player` | ~939 |
+| `fact_meta_trend` | ~7 400 |
+| `fact_draft` | ~82 600 |
+| `dim_champion` | ~170 |
+| `dim_team` | ~194 |
 
 ---
 
@@ -131,11 +134,11 @@ print(sorted(pages)[:10])
 ```
 
 **Correction** :
-- Si les OverviewPages ne sont pas des pages LFL (`LFL/...`), le Bronze est corrompu → relancer l'ingestion :
+- Si les OverviewPages ne sont pas des pages LFL/EMEA (`LFL/...` ou `EMEA Masters/...`), le Bronze est corrompu → relancer l'ingestion :
   ```bash
   uv run python -m ingestion.leaguepedia.ingest --table ScoreboardPlayers
   ```
-- Si les lignes sont simplement exclues par le filtre métier, vérifier que la liste des 71 OverviewPages LFL dans `Tournaments` est bien à jour.
+- Si les lignes sont simplement exclues par le filtre métier, vérifier que la liste des 89 OverviewPages (LFL + EMEA Masters) dans `Tournaments` est bien à jour.
 
 ---
 

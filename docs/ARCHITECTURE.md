@@ -3,7 +3,7 @@
 > Schéma formel d'architecture du datalake Nexus Analytics.
 > Répond au critère C18 (conception architecture datalake) du référentiel RNCP.
 >
-> Dernière mise à jour : 2026-07-09
+> Dernière mise à jour : 2026-09-07
 
 ---
 
@@ -26,10 +26,10 @@ graph LR
     end
 
     subgraph Silver["☁️ GCS Silver — Données normalisées"]
-        S1["silver/lfl_matches/{date}.json<br/>3 053 parties LFL"]
-        S2["silver/lfl_player_stats/{date}.json<br/>30 530 stats joueurs"]
-        S3["silver/lfl_players/{date}.json<br/>792 joueurs, 194 comptes EUW"]
-        S4["silver/lfl_drafts/{date}.json<br/>Picks/bans unpivotés"]
+        S1["silver/lfl_matches/{date}.json<br/>4 535 parties LFL + EMEA"]
+        S2["silver/lfl_player_stats/{date}.json<br/>32 690 stats joueurs"]
+        S3["silver/lfl_players/{date}.json<br/>792 joueurs LFL, 194 comptes EUW"]
+        S4["silver/lfl_drafts/{date}.json<br/>82 630 actions picks/bans"]
     end
 
     subgraph Gold["BigQuery Gold — Entrepôt analytique"]
@@ -180,10 +180,10 @@ sequenceDiagram
     LP-->>Bronze: bronze/leaguepedia/{table}/{date}.json
     Discord-->>Discord: ✅ Leaguepedia ingéré (9 tables)
 
-    Bronze->>Silver: lfl_matches (3053 lignes)
-    Bronze->>Silver: lfl_player_stats (30530 lignes)
+    Bronze->>Silver: lfl_matches (4535 lignes LFL + EMEA)
+    Bronze->>Silver: lfl_player_stats (32690 lignes)
     Bronze->>Silver: lfl_players (792 joueurs)
-    Bronze->>Silver: lfl_drafts
+    Bronze->>Silver: lfl_drafts (82630 actions)
     Discord-->>Discord: ✅ Silver transforms complets
 
     Silver->>BQ: bq_loader (WRITE_TRUNCATE)
