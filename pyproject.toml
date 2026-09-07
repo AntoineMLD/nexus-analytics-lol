@@ -11,7 +11,10 @@ dependencies = [
     "google-cloud-storage>=3.10.1",
     "httpx>=0.28.1",
     "mwrogue>=0.1.5",
+    "pandas>=3.0.5",
+    "plotly>=7.0.0",
     "pydantic-settings>=2.14.1",
+    "streamlit>=1.63.0",
     "uvicorn>=0.48.0",
 ]
 
