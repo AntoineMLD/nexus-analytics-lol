@@ -85,13 +85,27 @@ with col_l:
 
 with col_r:
     st.markdown(
-        f"<h3 style='text-align:center; color:#ff7f0e'>{player_b}</h3>", unsafe_allow_html=True
+        f"<h3 style='text-align:right; color:#ff7f0e'>{player_b}</h3>", unsafe_allow_html=True
     )
     for _label, _, fn, _ in metrics:
         val_a = fn(stats_a)
         val_b = fn(stats_b)
         delta = round(val_b - val_a, 2) if isinstance(val_a, int | float) else None
-        st.metric(label="", value=val_b, delta=delta, label_visibility="collapsed")
+
+        if delta is not None and delta > 0:
+            delta_html = f"<span style='color:#2e7d32; font-size:0.85em'>▲ {delta}</span>"
+        elif delta is not None and delta < 0:
+            delta_html = f"<span style='color:#c62828; font-size:0.85em'>▼ {abs(delta)}</span>"
+        else:
+            delta_html = ""
+
+        st.markdown(
+            f"<div style='text-align:right; padding: 6px 0 14px 0;'>"
+            f"<span style='font-size:1.4em; font-weight:700'>{val_b}</span><br>"
+            f"{delta_html}"
+            f"</div>",
+            unsafe_allow_html=True,
+        )
 
 # ─── Radar chart ─────────────────────────────────────────────────────────────
 
