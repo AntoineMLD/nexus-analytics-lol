@@ -277,6 +277,85 @@ def fetch_team_draft(team: str, action_type: str | None = None) -> pd.DataFrame:
 
 
 @st.cache_data(ttl=600, show_spinner=False)
+def fetch_meta_alerts(min_picks: int = 5) -> pd.DataFrame:
+    """Champions avec winrate anormal sur les 2 derniers patches.
+
+    Calcule l'écart par rapport à la moyenne du patch (déviation).
+    Permet de détecter les champions sur/sous-performants rapidement.
+    """
+    sql = f"""
+        WITH latest_patches AS (
+            SELECT DISTINCT patch
+            FROM {_table(DATASET_GOLD, "fact_meta_trend")}
+            WHERE patch IS NOT NULL
+            ORDER BY patch DESC
+            LIMIT 2
+        ),
+        patch_avg AS (
+            SELECT
+                patch,
+                AVG(win_rate_pct) AS avg_wr
+            FROM {_table(DATASET_GOLD, "fact_meta_trend")}
+            WHERE patch IN (SELECT patch FROM latest_patches)
+            GROUP BY patch
+        )
+        SELECT
+            m.patch,
+            m.champion,
+            m.picks,
+            m.win_rate_pct,
+            m.pick_rate_pct,
+            p.avg_wr AS avg_wr_patch,
+            ROUND(m.win_rate_pct - p.avg_wr, 1) AS deviation
+        FROM {_table(DATASET_GOLD, "fact_meta_trend")} m
+        JOIN patch_avg p ON m.patch = p.patch
+        WHERE m.patch IN (SELECT patch FROM latest_patches)
+          AND m.picks >= {min_picks}
+        ORDER BY deviation DESC
+        LIMIT 80
+    """
+    return _client().query(sql).to_dataframe()
+
+
+@st.cache_data(ttl=600, show_spinner=False)
+def fetch_meta_by_competition(min_picks: int = 3) -> pd.DataFrame:
+    """Pick rate et win rate par champion, ventilés par compétition (LFL vs EMEA Masters).
+
+    Permet de voir quels champions émergent en LFL avant d'apparaître en EMEA,
+    et inversement — outil clé pour la préparation des qualifications EMEA Masters.
+    """
+    sql = f"""
+        SELECT
+            CASE
+                WHEN UPPER(m.overview_page) LIKE '%EMEA%' THEN 'EMEA Masters'
+                ELSE 'LFL'
+            END                                                             AS competition,
+            ps.champion,
+            COUNT(*)                                                        AS picks,
+            ROUND(COUNTIF(ps.player_win) * 100.0 / COUNT(*), 1)            AS win_rate_pct,
+            ROUND(
+                COUNT(*) * 100.0
+                / SUM(COUNT(*)) OVER (
+                    PARTITION BY
+                        CASE
+                            WHEN UPPER(m.overview_page) LIKE '%EMEA%' THEN 'EMEA Masters'
+                            ELSE 'LFL'
+                        END
+                ),
+                2
+            )                                                               AS pick_rate_pct
+        FROM {_table(DATASET_STAGING, "stg_lfl_player_stats")} ps
+        JOIN {_table(DATASET_STAGING, "stg_lfl_matches")} m
+          ON ps.game_id = m.game_id
+        WHERE ps.champion IS NOT NULL
+        GROUP BY competition, ps.champion
+        HAVING COUNT(*) >= {min_picks}
+        ORDER BY picks DESC
+    """
+    return _client().query(sql).to_dataframe()
+
+
+@st.cache_data(ttl=600, show_spinner=False)
 def fetch_kpi_summary() -> dict:
     """KPIs globaux pour la page d'accueil."""
     sql = f"""
