@@ -362,20 +362,20 @@ def fetch_team_compositions(team: str, limit: int = 10) -> pd.DataFrame:
     sql = f"""
         SELECT
             game_id,
-            MAX(datetime_utc)                               AS datetime_utc,
-            MAX(patch)                                      AS patch,
+            MAX(datetime_utc)                                   AS datetime_utc,
+            MAX(patch)                                          AS patch,
             team_side,
-            LOGICAL_OR(team_won)                            AS team_won,
-            MAX(CASE WHEN action_order = 1 THEN champion END) AS pick_1,
-            MAX(CASE WHEN action_order = 2 THEN champion END) AS pick_2,
-            MAX(CASE WHEN action_order = 3 THEN champion END) AS pick_3,
-            MAX(CASE WHEN action_order = 4 THEN champion END) AS pick_4,
-            MAX(CASE WHEN action_order = 5 THEN champion END) AS pick_5
+            LOGICAL_OR(team_won)                                AS team_won,
+            MAX(CASE WHEN action_order = 1 THEN champion END)   AS pick_1,
+            MAX(CASE WHEN action_order = 2 THEN champion END)   AS pick_2,
+            MAX(CASE WHEN action_order = 3 THEN champion END)   AS pick_3,
+            MAX(CASE WHEN action_order = 4 THEN champion END)   AS pick_4,
+            MAX(CASE WHEN action_order = 5 THEN champion END)   AS pick_5
         FROM {_table(DATASET_GOLD, "fact_draft")}
         WHERE team_name = '{team}'
           AND action_type = 'pick'
         GROUP BY game_id, team_side
-        ORDER BY MAX(datetime_utc) DESC
+        ORDER BY datetime_utc DESC
         LIMIT {limit}
     """
     return _client().query(sql).to_dataframe()
