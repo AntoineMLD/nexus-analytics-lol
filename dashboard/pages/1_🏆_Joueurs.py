@@ -61,7 +61,7 @@ fig = px.bar(
 )
 fig.update_layout(showlegend=False, coloraxis_showscale=False, height=400)
 fig.update_traces(textposition="outside")
-st.plotly_chart(fig, use_container_width=True)
+st.plotly_chart(fig, width="stretch")
 
 # ─── Tableau complet ─────────────────────────────────────────────────────────
 
@@ -80,7 +80,7 @@ st.dataframe(
             "avg_cs": "CS moy.",
         }
     ),
-    use_container_width=True,
+    width="stretch",
     hide_index=True,
     column_config={
         "Win% ": st.column_config.ProgressColumn(

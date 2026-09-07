@@ -98,7 +98,7 @@ fig.add_vline(
 
 fig.update_traces(textposition="top center", textfont_size=9)
 fig.update_layout(height=550, coloraxis_showscale=False)
-st.plotly_chart(fig, use_container_width=True)
+st.plotly_chart(fig, width="stretch")
 
 # ─── Top 10 champions du patch ───────────────────────────────────────────────
 
@@ -120,7 +120,7 @@ with col_a:
     fig2.update_layout(
         yaxis={"categoryorder": "total ascending"}, height=350, coloraxis_showscale=False
     )
-    st.plotly_chart(fig2, use_container_width=True)
+    st.plotly_chart(fig2, width="stretch")
 
 with col_b:
     st.markdown("#### Top 10 — Win rate (≥ pick moyen)")
@@ -140,7 +140,7 @@ with col_b:
     fig3.update_layout(
         yaxis={"categoryorder": "total ascending"}, height=350, coloraxis_showscale=False
     )
-    st.plotly_chart(fig3, use_container_width=True)
+    st.plotly_chart(fig3, width="stretch")
 
 # ─── Tableau ─────────────────────────────────────────────────────────────────
 
@@ -156,6 +156,6 @@ with st.expander("Données brutes"):
                 "win_rate_pct": "Win %",
             }
         ),
-        use_container_width=True,
+        width="stretch",
         hide_index=True,
     )

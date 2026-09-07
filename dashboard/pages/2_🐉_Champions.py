@@ -67,7 +67,7 @@ fig = px.scatter(
 fig.add_hline(y=50, line_dash="dash", line_color="gray", opacity=0.5)
 fig.update_traces(textposition="top center", textfont_size=9)
 fig.update_layout(height=500, coloraxis_showscale=False)
-st.plotly_chart(fig, use_container_width=True)
+st.plotly_chart(fig, width="stretch")
 
 # ─── Top 15 champions (barres) ───────────────────────────────────────────────
 
@@ -89,7 +89,7 @@ fig2 = px.bar(
     text="total_games_played",
 )
 fig2.update_layout(yaxis={"categoryorder": "total ascending"}, height=450, coloraxis_showscale=True)
-st.plotly_chart(fig2, use_container_width=True)
+st.plotly_chart(fig2, width="stretch")
 
 # ─── Tableau ─────────────────────────────────────────────────────────────────
 
@@ -116,6 +116,6 @@ with st.expander("Tableau détaillé"):
                 "avg_assists": "A",
             }
         ),
-        use_container_width=True,
+        width="stretch",
         hide_index=True,
     )

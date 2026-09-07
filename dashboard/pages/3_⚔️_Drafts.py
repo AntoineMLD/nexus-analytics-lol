@@ -81,7 +81,7 @@ fig.update_layout(
     height=450,
     coloraxis_showscale=False,
 )
-st.plotly_chart(fig, use_container_width=True)
+st.plotly_chart(fig, width="stretch")
 
 # ─── Tableau historique ───────────────────────────────────────────────────────
 
@@ -101,6 +101,6 @@ st.dataframe(
             "team_side": "Côté",
         }
     ),
-    use_container_width=True,
+    width="stretch",
     hide_index=True,
 )
