@@ -49,7 +49,7 @@ def send_discord_notification(message: str) -> None:
 @contextmanager
 def gcs_client():
     """Context manager that opens and closes a Google Cloud Storage client."""
-    client = storage.Client()
+    client = storage.Client(project=settings.gcp_project_id or None)
     try:
         yield client
     finally:
