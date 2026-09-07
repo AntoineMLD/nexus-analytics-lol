@@ -6,28 +6,41 @@ pour éviter les requêtes répétées pendant la session.
 Les requêtes ciblent les tables Gold matérialisées par dbt.
 """
 
+import os
+
 import pandas as pd
 import streamlit as st
+from google.api_core.exceptions import NotFound
 from google.cloud import bigquery
 
-GCP_PROJECT = None  # chargé depuis st.secrets ou variable d'env au runtime
 DATASET_GOLD = "gold_gold"
 DATASET_STAGING = "gold_staging"
 
 
 def _client() -> bigquery.Client:
     """Retourne un client BigQuery (ADC ou Service Account selon l'env)."""
-    import os
-
     project = os.environ.get("GCP_PROJECT_ID", "")
     return bigquery.Client(project=project, location="europe-west1")
 
 
 def _table(dataset: str, name: str) -> str:
-    import os
-
     project = os.environ.get("GCP_PROJECT_ID", "")
     return f"`{project}.{dataset}.{name}`"
+
+
+@st.cache_data(ttl=3600, show_spinner=False)
+def _team_table_available() -> bool:
+    """Vérifie si dim_player_current_team existe dans BigQuery.
+
+    Résultat mis en cache 1 heure pour éviter les appels répétés.
+    Retourne False si la table n'existe pas encore (dbt run non exécuté).
+    """
+    try:
+        project = os.environ.get("GCP_PROJECT_ID", "")
+        _client().get_table(f"{project}.{DATASET_GOLD}.dim_player_current_team")
+        return True
+    except NotFound:
+        return False
 
 
 @st.cache_data(ttl=600, show_spinner=False)
@@ -47,16 +60,32 @@ def fetch_seasons() -> list[str]:
 @st.cache_data(ttl=600, show_spinner=False)
 def fetch_players(min_games: int = 5, season: str | None = None) -> pd.DataFrame:
     """Joueurs LFL avec stats agrégées, équipe actuelle et historique d'équipes."""
+    has_team = _team_table_available()
+    team_join = (
+        f"LEFT JOIN {_table(DATASET_GOLD, 'dim_player_current_team')} t ON ps.player_link = t.player_id"
+        if has_team
+        else ""
+    )
+    team_cols = (
+        "t.current_team, t.total_games_in_team, t.last_game_date,"
+        " ARRAY_LENGTH(t.all_teams_played) AS teams_count,"
+        " ARRAY_TO_STRING(t.all_teams_played, ' → ') AS teams_history,"
+        if has_team
+        else "NULL AS current_team, NULL AS total_games_in_team, NULL AS last_game_date,"
+        " NULL AS teams_count, NULL AS teams_history,"
+    )
+    team_group = (
+        "t.current_team, t.total_games_in_team, t.last_game_date, t.all_teams_played,"
+        if has_team
+        else ""
+    )
+
     if season:
         sql = f"""
             SELECT
                 ps.player_link                                                          AS player_id,
                 ps.player_name,
-                t.current_team,
-                t.total_games_in_team,
-                t.last_game_date,
-                ARRAY_LENGTH(t.all_teams_played)                                        AS teams_count,
-                ARRAY_TO_STRING(t.all_teams_played, ' → ')                             AS teams_history,
+                {team_cols}
                 COUNT(DISTINCT ps.game_id)                                              AS total_games,
                 ROUND(COUNTIF(ps.player_win) * 100.0 / COUNT(*), 1)                    AS win_rate_pct,
                 ROUND(AVG(ps.kills), 2)                                                 AS avg_kills,
@@ -66,39 +95,37 @@ def fetch_players(min_games: int = 5, season: str | None = None) -> pd.DataFrame
                 ROUND(SAFE_DIVIDE(AVG(ps.kills) + AVG(ps.assists),
                                   GREATEST(AVG(ps.deaths), 1)), 2)                     AS kda
             FROM {_table(DATASET_STAGING, "stg_lfl_player_stats")} ps
-            JOIN {_table(DATASET_STAGING, "stg_lfl_matches")} m
-              ON ps.game_id = m.game_id
-            LEFT JOIN {_table(DATASET_GOLD, "dim_player_current_team")} t
-              ON ps.player_link = t.player_id
+            JOIN {_table(DATASET_STAGING, "stg_lfl_matches")} m ON ps.game_id = m.game_id
+            {team_join}
             WHERE STARTS_WITH(m.overview_page, '{season}')
-            GROUP BY
-                ps.player_link, ps.player_name,
-                t.current_team, t.total_games_in_team, t.last_game_date,
-                t.all_teams_played
+            GROUP BY ps.player_link, ps.player_name, {team_group}
             HAVING COUNT(DISTINCT ps.game_id) >= {min_games}
             ORDER BY total_games DESC
             LIMIT 200
         """
     else:
+        team_join_p = (
+            f"LEFT JOIN {_table(DATASET_GOLD, 'dim_player_current_team')} t ON p.player_id = t.player_id"
+            if has_team
+            else ""
+        )
+        team_cols_p = (
+            "t.current_team, t.total_games_in_team, t.last_game_date,"
+            " ARRAY_LENGTH(t.all_teams_played) AS teams_count,"
+            " ARRAY_TO_STRING(t.all_teams_played, ' → ') AS teams_history,"
+            if has_team
+            else "NULL AS current_team, NULL AS total_games_in_team, NULL AS last_game_date,"
+            " NULL AS teams_count, NULL AS teams_history,"
+        )
         sql = f"""
             SELECT
-                p.player_id,
-                p.player_name,
-                t.current_team,
-                t.total_games_in_team,
-                t.last_game_date,
-                ARRAY_LENGTH(t.all_teams_played)                                        AS teams_count,
-                ARRAY_TO_STRING(t.all_teams_played, ' → ')                             AS teams_history,
-                p.total_games,
-                p.win_rate_pct,
-                p.avg_kills,
-                p.avg_deaths,
-                p.avg_assists,
-                p.avg_cs,
+                p.player_id, p.player_name,
+                {team_cols_p}
+                p.total_games, p.win_rate_pct, p.avg_kills, p.avg_deaths,
+                p.avg_assists, p.avg_cs,
                 ROUND(SAFE_DIVIDE(p.avg_kills + p.avg_assists, GREATEST(p.avg_deaths, 1)), 2) AS kda
             FROM {_table(DATASET_GOLD, "dim_player")} p
-            LEFT JOIN {_table(DATASET_GOLD, "dim_player_current_team")} t
-              ON p.player_id = t.player_id
+            {team_join_p}
             WHERE p.total_games >= {min_games}
             ORDER BY p.total_games DESC
             LIMIT 200
@@ -187,24 +214,27 @@ def fetch_player_names() -> list[str]:
 @st.cache_data(ttl=600, show_spinner=False)
 def fetch_player_stats_by_name(player_name: str) -> dict | None:
     """Stats complètes d'un joueur par nom, avec équipe actuelle et historique."""
+    has_team = _team_table_available()
+    team_join = (
+        f"LEFT JOIN {_table(DATASET_GOLD, 'dim_player_current_team')} t ON p.player_id = t.player_id"
+        if has_team
+        else ""
+    )
+    team_cols = (
+        "t.current_team, t.last_game_date, t.total_games_in_team,"
+        " ARRAY_TO_STRING(t.all_teams_played, ' · ') AS teams_history,"
+        if has_team
+        else "NULL AS current_team, NULL AS last_game_date, NULL AS total_games_in_team,"
+        " NULL AS teams_history,"
+    )
     sql = f"""
         SELECT
-            p.player_id,
-            p.player_name,
-            p.total_games,
-            p.win_rate_pct,
-            p.avg_kills,
-            p.avg_deaths,
-            p.avg_assists,
-            p.avg_cs,
+            p.player_id, p.player_name, p.total_games, p.win_rate_pct,
+            p.avg_kills, p.avg_deaths, p.avg_assists, p.avg_cs,
             ROUND(SAFE_DIVIDE(p.avg_kills + p.avg_assists, GREATEST(p.avg_deaths, 1)), 2) AS kda,
-            t.current_team,
-            t.last_game_date,
-            t.total_games_in_team,
-            ARRAY_TO_STRING(t.all_teams_played, ' · ')                             AS teams_history
+            {team_cols}
         FROM {_table(DATASET_GOLD, "dim_player")} p
-        LEFT JOIN {_table(DATASET_GOLD, "dim_player_current_team")} t
-          ON p.player_id = t.player_id
+        {team_join}
         WHERE p.player_name = '{player_name}'
         LIMIT 1
     """
@@ -214,7 +244,9 @@ def fetch_player_stats_by_name(player_name: str) -> dict | None:
 
 @st.cache_data(ttl=600, show_spinner=False)
 def fetch_player_current_team(player_name: str) -> str | None:
-    """Équipe actuelle d'un joueur (accès rapide)."""
+    """Équipe actuelle d'un joueur (accès rapide). Retourne None si table absente."""
+    if not _team_table_available():
+        return None
     sql = f"""
         SELECT t.current_team
         FROM {_table(DATASET_GOLD, "dim_player")} p
