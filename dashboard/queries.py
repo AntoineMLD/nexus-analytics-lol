@@ -452,30 +452,31 @@ def fetch_meta_by_competition(min_picks: int = 3) -> pd.DataFrame:
     et inversement — outil clé pour la préparation des qualifications EMEA Masters.
     """
     sql = f"""
+        WITH base AS (
+            SELECT
+                CASE
+                    WHEN UPPER(m.overview_page) LIKE '%EMEA%' THEN 'EMEA Masters'
+                    ELSE 'LFL'
+                END             AS competition,
+                ps.champion,
+                ps.player_win
+            FROM {_table(DATASET_STAGING, "stg_lfl_player_stats")} ps
+            JOIN {_table(DATASET_STAGING, "stg_lfl_matches")} m
+              ON ps.game_id = m.game_id
+            WHERE ps.champion IS NOT NULL
+        )
         SELECT
-            CASE
-                WHEN UPPER(m.overview_page) LIKE '%EMEA%' THEN 'EMEA Masters'
-                ELSE 'LFL'
-            END                                                             AS competition,
-            ps.champion,
+            competition,
+            champion,
             COUNT(*)                                                        AS picks,
-            ROUND(COUNTIF(ps.player_win) * 100.0 / COUNT(*), 1)            AS win_rate_pct,
+            ROUND(COUNTIF(player_win) * 100.0 / COUNT(*), 1)               AS win_rate_pct,
             ROUND(
                 COUNT(*) * 100.0
-                / SUM(COUNT(*)) OVER (
-                    PARTITION BY
-                        CASE
-                            WHEN UPPER(m.overview_page) LIKE '%EMEA%' THEN 'EMEA Masters'
-                            ELSE 'LFL'
-                        END
-                ),
+                / SUM(COUNT(*)) OVER (PARTITION BY competition),
                 2
             )                                                               AS pick_rate_pct
-        FROM {_table(DATASET_STAGING, "stg_lfl_player_stats")} ps
-        JOIN {_table(DATASET_STAGING, "stg_lfl_matches")} m
-          ON ps.game_id = m.game_id
-        WHERE ps.champion IS NOT NULL
-        GROUP BY competition, ps.champion
+        FROM base
+        GROUP BY competition, champion
         HAVING COUNT(*) >= {min_picks}
         ORDER BY picks DESC
     """
