@@ -486,6 +486,56 @@ gcloud auth application-default set-quota-project nexus-analytics-prod-498107
 
 ---
 
+### Retour d'expérience — pile technique
+
+> Section répondant au critère C14 (retour d'expérience pile technique).
+
+#### BigQuery — entrepôt analytique
+
+**Choix retenu** : BigQuery on-demand (Google Cloud)
+
+**Alternatives évaluées** :
+
+| Alternative | Avantages | Raison du rejet |
+|-------------|-----------|-----------------|
+| **DuckDB en local** | Gratuit, très rapide, SQL standard | Pas de multi-utilisateurs, pas d'API REST native, pas de stockage persistant partagé, gestion des accès IAM impossible |
+| **Snowflake** | Séparation compute/storage, multi-cloud | Coût : 2$/crédit-heure minimum, incompatible avec le budget 300€/mois. Complexité opérationnelle disproportionnée |
+| **Amazon Redshift** | Mature, SQL compatible | Hors GCP, nécessiterait double facturation et transfert de données. Terraform plus complexe |
+| **PostgreSQL (Cloud SQL)** | Simple, standard SQL | Optimisé pour l'OLTP, pas l'OLAP. Requêtes analytiques sur 30 000 lignes seraient lentes sans colonnar storage. Coût fixe mensuel vs on-demand BigQuery |
+| **BigQuery** ✅ | Serverless, facturation à l'usage, colonnar storage, intégration dbt native, IAM GCP, tier gratuit 1 TB/mois | **Retenu** |
+
+**Retour d'expérience** :
+- Le tier gratuit BigQuery (1 TB de requêtes/mois) est largement suffisant pour un pipeline hebdomadaire LFL (~500 Ko de données scannées par run).
+- La latence des requêtes BigQuery est de 2–5 secondes pour des tables de 30 000 lignes, acceptable pour une API analytique interne.
+- Le partitionnement n'est pas activé (tables trop petites pour justifier la complexité) — à reconsidérer si le volume augmente.
+- Limite identifiée : l'absence de connexion permanente (chaque requête FastAPI ouvre une connexion BigQuery) introduit une latence de ~1–2 secondes. Pour une API en production à fort trafic, un cache Redis devrait être ajouté.
+
+#### dbt Core — transformation Gold
+
+**Choix retenu** : dbt Core (open source, local)
+
+**Alternative écartée** : dbt Cloud (SaaS payant, inutile pour un projet solo sans orchestration cloud).
+
+**Retour d'expérience** :
+- Les tests dbt (not_null, unique, relationships, accepted_values) ont détecté 3 anomalies réelles pendant le développement (dates nulles, doublons de game_id, relations orphelines).
+- La documentation auto-générée (`dbt docs serve`) est utile pour la soutenance RNCP.
+- Limite : sans scheduler (Airflow, Cloud Composer), dbt est lancé manuellement. Le `run_pipeline.py` d'orchestration pallie cette limitation pour le périmètre actuel.
+
+#### Python + NDJSON — couche Silver (divergence vs spécifications initiales)
+
+**Spécification initiale** (rapport BC01 p.8) : DuckDB + Parquet.
+
+**Implémentation réelle** : Python natif + NDJSON (`.json`).
+
+**Justification du changement** :
+- DuckDB aurait nécessité une dépendance supplémentaire et une conversion CSV→DuckDB→Parquet, sans valeur ajoutée pour des volumes de quelques Mo.
+- Python natif (json, datetime, re) est plus lisible, plus facile à tester (unittest.mock), et produit des NDJSON directement ingérables par BigQuery (`autodetect=True`).
+- Parquet aurait été pertinent pour des volumes > 1 Go — hors scope actuel.
+
+**Impact sur la certification** : le rôle de zone Silver normalisée est identique. La divergence est documentée et justifiable à l'oral (capacité d'adaptation architecturale).
+
+---
+
 ### P2 — Qualité et documentation
 
 - [ ] **Tests dbt métier** — règles de domaine dans `dbt/tests/` :

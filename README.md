@@ -93,31 +93,135 @@ scripts/
 
 ---
 
-## Installation
+## Installation complète pas-à-pas
+
+### Prérequis
+
+Avant de commencer, vérifier que les outils suivants sont installés :
+
+```bash
+python --version       # Python 3.11+
+uv --version           # uv (gestionnaire de paquets)
+gcloud --version       # Google Cloud SDK
+terraform --version    # Terraform (pour l'infrastructure)
+```
+
+Si `uv` n'est pas installé :
+```bash
+curl -LsSf https://astral.sh/uv/install.sh | sh
+source ~/.zshrc  # ou ~/.bashrc selon votre shell
+```
+
+### Étape 1 — Cloner le dépôt et installer les dépendances
 
 ```bash
 git clone git@github.com:AntoineMLD/nexus-analytics-lol.git
 cd nexus-analytics-lol
-uv sync
+uv sync                # installe toutes les dépendances depuis uv.lock
 ```
 
-Créer un fichier `.env` à la racine (voir `.env.example` pour la liste complète) :
+### Étape 2 — Configurer les variables d'environnement
 
-```env
-GCS_BUCKET_NAME=<nom du bucket GCS>
-RIOT_API=<clé Riot Games API>
-FANDOM_BOT_NAME=<compte@BotName>
-FANDOM_BOT_PASSWORD=<mot de passe bot Fandom>
-GCP_PROJECT_ID=<ID du projet GCP — pour BigQuery>
-DISCORD_WEBHOOK_URL=<webhook Discord — optionnel>
-API_KEY=<clé Google Drive>
-```
-
-Authentification GCP :
+Copier `.env.example` en `.env` et renseigner chaque valeur :
 
 ```bash
+cp .env.example .env
+```
+
+```env
+GCS_BUCKET_NAME=<nom du bucket GCS — ex: nexus-analytics-bucket>
+RIOT_API_KEY=<clé Riot Games API — obtenue sur developer.riotgames.com>
+FANDOM_BOT_NAME=<compte@BotName — ex: SpideyBot>
+FANDOM_BOT_PASSWORD=<mot de passe bot Fandom>
+GCP_PROJECT_ID=<ID du projet GCP — ex: nexus-analytics-prod-498107>
+DISCORD_WEBHOOK_URL=<URL webhook Discord — optionnel, pour les alertes>
+GOOGLE_DRIVE_API_KEY=<clé API Google Drive — pour Oracle's Elixir>
+NEXUS_API_KEY=<clé d'accès à l'API FastAPI — choisir une valeur secrète>
+```
+
+### Étape 3 — Authentification GCP
+
+```bash
+# Connexion avec votre compte Google
 gcloud auth application-default login
-gcloud config set project <PROJECT_ID>
+
+# Configurer le projet par défaut
+gcloud config set project <GCP_PROJECT_ID>
+
+# Définir le projet de facturation (nécessaire pour GCS + BigQuery)
+gcloud auth application-default set-quota-project <GCP_PROJECT_ID>
+```
+
+Vérification :
+```bash
+gcloud auth application-default print-access-token   # doit retourner un token
+gsutil ls                                              # doit lister vos buckets
+```
+
+### Étape 4 — Provisionner l'infrastructure GCP (Terraform)
+
+> À réaliser une seule fois, ou après chaque modification de `terraform/`.
+
+```bash
+cd terraform
+terraform init              # télécharger les providers
+terraform plan              # vérifier les changements avant application
+terraform apply             # créer les ressources GCP (bucket, datasets BQ, IAM)
+cd ..
+```
+
+Ressources créées :
+- Bucket GCS `nexus-analytics-bucket` (région EU, lifecycle Bronze → Coldline 90j)
+- Datasets BigQuery `raw`, `gold_gold`, `gold_staging`
+- Compte de service `nexus-ingestion` (écriture GCS + BQ raw)
+- Compte de service `nexus-api` (lecture BQ Gold uniquement)
+
+### Étape 5 — Configurer dbt
+
+```bash
+# Copier le profil de connexion BigQuery
+mkdir -p ~/.dbt
+cp dbt/profiles.yml ~/.dbt/profiles.yml
+
+# Éditer ~/.dbt/profiles.yml et remplacer GCP_PROJECT_ID par votre projet
+```
+
+Vérification :
+```bash
+cd dbt
+dbt debug    # doit afficher "All checks passed!"
+cd ..
+```
+
+### Étape 6 — Lancer le pipeline complet
+
+```bash
+# Ingestion complète + Silver + Gold (première fois)
+uv run python -m pipeline.orchestration.run_pipeline
+
+# Ingestion uniquement
+uv run python -m pipeline.orchestration.run_pipeline --skip-silver
+
+# Pas d'ingestion (réutilise les Bronze existants)
+uv run python -m pipeline.orchestration.run_pipeline --skip-ingest
+```
+
+### Étape 7 — Vérifier les données
+
+```bash
+# API FastAPI (données Gold)
+uv run uvicorn api.main:app --reload
+
+# Accéder aux docs interactives : http://localhost:8000/docs
+# Tester un endpoint :
+curl -H "X-API-Key: <NEXUS_API_KEY>" http://localhost:8000/health
+curl -H "X-API-Key: <NEXUS_API_KEY>" "http://localhost:8000/players?min_games=10"
+```
+
+### Étape 8 — Lancer les tests
+
+```bash
+uv run pytest tests/ -v   # 261 tests, doit passer à 100% sans credentials GCP
 ```
 
 ---

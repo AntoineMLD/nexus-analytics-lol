@@ -55,3 +55,30 @@ models:
       - name: total_games
         tests:
           - not_null
+
+  - name: dim_player_current_team
+    description: >
+      Dimension SCD2 — source : équipe actuelle de chaque joueur LFL.
+      Une ligne par joueur (player_id unique), représente l'état le plus
+      récent dans nos données. Alimenté le snapshot snap_player_team
+      qui implémente SCD Type 2 et conserve l'historique des changements
+      d'équipe avec des plages dbt_valid_from / dbt_valid_to.
+    columns:
+      - name: player_id
+        description: "player_link wiki (clé primaire). Référence dim_player."
+        tests:
+          - not_null
+          - unique
+      - name: player_name
+        tests:
+          - not_null
+      - name: current_team
+        description: "Équipe la plus récente dans laquelle le joueur a joué."
+        tests:
+          - not_null
+      - name: last_game_date
+        description: "Date de la dernière partie connue dans cette équipe."
+      - name: total_games_in_team
+        description: "Nombre de parties jouées dans l'équipe actuelle."
+      - name: all_teams_played
+        description: "Tableau (ARRAY) de toutes les équipes jouées par ce joueur."

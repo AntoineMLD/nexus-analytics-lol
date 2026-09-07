@@ -30,7 +30,7 @@ jobs:
       - run: uv run pytest tests/ -v
         env:
           GCS_BUCKET_NAME: test-bucket
-          API_KEY: test-key
+          NEXUS_API_KEY: test-key
           DISCORD_WEBHOOK_URL: ""
           FANDOM_BOT_NAME: test-user
           FANDOM_BOT_PASSWORD: test-password

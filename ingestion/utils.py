@@ -15,7 +15,7 @@ class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
 
     gcs_bucket_name: str
-    api_key: str
+    api_key: str = ""
     riot_api: str = ""
     discord_webhook_url: str = ""
     fandom_bot_name: str = ""
