@@ -63,49 +63,50 @@ metrics = [
     ("CS moyen", "avg_cs", lambda s: round(s["avg_cs"], 0), None),
 ]
 
-col_l, col_gap_l, col_m, col_gap_r, col_r = st.columns([3, 0.5, 2, 0.5, 3])
 
-with col_m:
-    st.markdown("<br>", unsafe_allow_html=True)
-    for label, _, _, _ in metrics:
-        st.markdown(
-            f"<p style='text-align:center; font-weight:bold; margin:18px 0'>{label}</p>",
-            unsafe_allow_html=True,
-        )
+def _delta_html(delta: float | None, align: str) -> str:
+    """Retourne le HTML coloré pour un delta positif/négatif."""
+    if delta is None or delta == 0:
+        return ""
+    color = "#2e7d32" if delta > 0 else "#c62828"
+    arrow = "▲" if delta > 0 else "▼"
+    return f"<br><small style='color:{color}'>{arrow} {abs(delta)}</small>"
 
-with col_l:
-    st.markdown(
-        f"<h3 style='text-align:center; color:#1f77b4'>{player_a}</h3>", unsafe_allow_html=True
+
+rows_html = ""
+for label, _, fn, _ in metrics:
+    val_a = fn(stats_a)
+    val_b = fn(stats_b)
+    is_numeric = isinstance(val_a, int | float)
+    delta_a = round(val_a - val_b, 2) if is_numeric else None
+    delta_b = round(val_b - val_a, 2) if is_numeric else None
+
+    rows_html += (
+        "<tr>"
+        f"<td style='text-align:left; padding:12px 20px; font-size:1.15em; font-weight:700'>"
+        f"{val_a}{_delta_html(delta_a, 'left')}</td>"
+        f"<td style='text-align:center; padding:12px 20px; font-weight:600; color:#888; white-space:nowrap'>"
+        f"{label}</td>"
+        f"<td style='text-align:right; padding:12px 20px; font-size:1.15em; font-weight:700'>"
+        f"{val_b}{_delta_html(delta_b, 'right')}</td>"
+        "</tr>"
     )
-    for _label, _, fn, _ in metrics:
-        val_a = fn(stats_a)
-        val_b = fn(stats_b)
-        delta = round(val_a - val_b, 2) if isinstance(val_a, int | float) else None
-        st.metric(label="", value=val_a, delta=delta, label_visibility="collapsed")
 
-with col_r:
-    st.markdown(
-        f"<h3 style='text-align:right; color:#ff7f0e'>{player_b}</h3>", unsafe_allow_html=True
-    )
-    for _label, _, fn, _ in metrics:
-        val_a = fn(stats_a)
-        val_b = fn(stats_b)
-        delta = round(val_b - val_a, 2) if isinstance(val_a, int | float) else None
-
-        if delta is not None and delta > 0:
-            delta_html = f"<span style='color:#2e7d32; font-size:0.85em'>▲ {delta}</span>"
-        elif delta is not None and delta < 0:
-            delta_html = f"<span style='color:#c62828; font-size:0.85em'>▼ {abs(delta)}</span>"
-        else:
-            delta_html = ""
-
-        st.markdown(
-            f"<div style='text-align:right; padding: 6px 0 14px 0;'>"
-            f"<span style='font-size:1.4em; font-weight:700'>{val_b}</span><br>"
-            f"{delta_html}"
-            f"</div>",
-            unsafe_allow_html=True,
-        )
+st.markdown(
+    f"""
+    <table style='width:100%; border-collapse:collapse;'>
+      <thead>
+        <tr>
+          <th style='text-align:left; color:#1f77b4; font-size:1.1em; padding:10px 20px'>{player_a}</th>
+          <th></th>
+          <th style='text-align:right; color:#ff7f0e; font-size:1.1em; padding:10px 20px'>{player_b}</th>
+        </tr>
+      </thead>
+      <tbody>{rows_html}</tbody>
+    </table>
+    """,
+    unsafe_allow_html=True,
+)
 
 # ─── Radar chart ─────────────────────────────────────────────────────────────
 
