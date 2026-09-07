@@ -809,7 +809,7 @@ uv run python -m pipeline.loaders.bq_loader --source leaguepedia --table lfl_pla
 uv run python -m pipeline.loaders.bq_loader --source leaguepedia --table lfl_drafts --date $(date +%Y-%m-%d)
 uv run python -m pipeline.loaders.bq_loader --source leaguepedia --table lfl_players --date $(date +%Y-%m-%d)
 uv run python -m pipeline.loaders.bq_loader --source oracle_elixir --table oracle_elixir --date $(date +%Y-%m-%d)
-uv run python -m pipeline.loaders.bq_loader --source riot_api --table riot_api --date $(date +%Y-%m-%d)
+uv run python -m pipeline.loaders.bq_loader --source riot_api --table riot_players --date $(date +%Y-%m-%d)
 
 # 5. dbt — rebuild Gold (inclut fact_oe_player_game, stg_riot_players, dim_player+puuid)
 uv run --with dbt-bigquery dbt run --project-dir dbt --profiles-dir dbt

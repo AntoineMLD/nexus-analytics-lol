@@ -4,7 +4,8 @@ Reads:
   - bronze/oracle_elixir/{year}/{file}.csv  (CSV, one row per player per game)
 
 Writes:
-  - silver/oracle_elixir/{date}.ndjson  (NDJSON, one row per player-game)
+  - silver/oracle_elixir/oracle_elixir/{date}.json  (NDJSON, one row per player-game)
+  (path convention: silver/{source}/{table}/{date}.json — compatible bq_loader)
 
 Each output row contains the player-level advanced metrics not available in
 Leaguepedia ScoreboardPlayers: gold/CS/XP diff at 15 min, CS per minute, DPM.
@@ -174,9 +175,12 @@ def build_silver_row(row: dict) -> dict:
 def save_to_gcs(records: list[dict], bucket_name: str, date: str) -> str:
     """Write Silver OE records to GCS as NDJSON.
 
+    Path follows the bq_loader convention: silver/{source}/{table}/{date}.json
+    → silver/oracle_elixir/oracle_elixir/{date}.json
+
     Returns the GCS destination path.
     """
-    destination = f"silver/oracle_elixir/{date}.ndjson"
+    destination = f"silver/oracle_elixir/oracle_elixir/{date}.json"
     content = "\n".join(json.dumps(row, ensure_ascii=False) for row in records)
     with gcs_client() as client:
         blob = client.bucket(bucket_name).blob(destination)

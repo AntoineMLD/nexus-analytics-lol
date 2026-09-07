@@ -4,7 +4,8 @@ Reads:
   - bronze/riot_api/{date}.ndjson  (one row per player account)
 
 Writes:
-  - silver/riot_api/{date}.ndjson  (one row per player with a valid PUUID)
+  - silver/riot_api/riot_players/{date}.json  (one row per player with a valid PUUID)
+  (path convention: silver/{source}/{table}/{date}.json — compatible bq_loader)
 
 Each output row:
   {"player_name": "Caliste", "puuid": "abc...xyz"}
@@ -68,9 +69,12 @@ def extract_player_puuids(rows: list[dict]) -> list[dict]:
 def save_to_gcs(records: list[dict], bucket_name: str, date: str) -> str:
     """Write player→PUUID records to GCS Silver as NDJSON.
 
+    Path follows the bq_loader convention: silver/{source}/{table}/{date}.json
+    → silver/riot_api/riot_players/{date}.json
+
     Returns the GCS destination path.
     """
-    destination = f"silver/riot_api/{date}.ndjson"
+    destination = f"silver/riot_api/riot_players/{date}.json"
     content = "\n".join(json.dumps(row) for row in records)
     with gcs_client() as client:
         blob = client.bucket(bucket_name).blob(destination)
