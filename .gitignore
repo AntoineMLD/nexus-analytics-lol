@@ -249,3 +249,7 @@ terraform/.terraform/
 terraform/*.tfstate
 terraform/*.tfstate.backup
 terraform/*.tfvars
+
+# Binaires et artefacts générés
+docs/*.docx
+/uv
