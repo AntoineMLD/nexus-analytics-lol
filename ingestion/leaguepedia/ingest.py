@@ -28,15 +28,18 @@ from ingestion.utils import (
     verify_gcs_object_exists,
 )
 
-LFL_LEAGUES = {"La Ligue Française", "La Ligue Française Division 2"}
+TARGET_LEAGUES = {
+    "La Ligue Française",
+    "La Ligue Française Division 2",
+    "EMEA Masters",
+}
 
 
 def load_lfl_overview_pages(bucket_name: str) -> set[str]:
-    """Load the most recent Tournaments Bronze file from GCS and return LFL OverviewPage values.
+    """Load the most recent Tournaments Bronze file from GCS and return target OverviewPage values.
 
     Lists all files under bronze/leaguepedia/Tournaments/ and picks the latest one.
-    Used to build a WHERE clause for tables that need LFL-only ingestion
-    (ScoreboardGames, ScoreboardPlayers) without relying on a Cargo table join.
+    Used to build a WHERE clause for ScoreboardGames ingestion (LFL + EMEA Masters).
 
     The mwcleric Cargo join is silently ignored by the MediaWiki API because
     it expects the parameter 'join on' (with space) but receives 'join_on'.
@@ -58,9 +61,9 @@ def load_lfl_overview_pages(bucket_name: str) -> set[str]:
         )
 
     rows = [json.loads(line) for line in content.splitlines() if line.strip()]
-    lfl_pages = {row["OverviewPage"] for row in rows if row.get("League") in LFL_LEAGUES}
-    logger.info("Loaded %d LFL OverviewPages from Tournaments Bronze.", len(lfl_pages))
-    return lfl_pages
+    target_pages = {row["OverviewPage"] for row in rows if row.get("League") in TARGET_LEAGUES}
+    logger.info("Loaded %d target OverviewPages from Tournaments Bronze.", len(target_pages))
+    return target_pages
 
 
 def build_overview_page_filter(pages: set[str]) -> str:
@@ -200,7 +203,7 @@ def fetch_lfl_filtered_table(
     """
     where = build_overview_page_filter(lfl_pages)
     logger.info(
-        "Fetching %s with auto_continue (WHERE covers %d LFL pages, order_by=%s)...",
+        "Fetching %s with auto_continue (WHERE covers %d target pages, order_by=%s)...",
         tables,
         len(lfl_pages),
         order_by,
@@ -294,7 +297,7 @@ def run_ingestion(table_names: list[str] | None = None) -> bool:
         lfl_pages = load_lfl_overview_pages(settings.gcs_bucket_name)
         if not lfl_pages:
             logger.error(
-                "LFL filter requested but no LFL OverviewPages found. "
+                "Target league filter requested but no OverviewPages found. "
                 "Ingest Tournaments first, or check Bronze date."
             )
 

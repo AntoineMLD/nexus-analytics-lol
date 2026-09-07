@@ -18,7 +18,7 @@ from pipeline.silver_transforms.lfl_players import (
     strip_wiki_markup,
 )
 
-LFL_LEAGUES = {"La Ligue Française", "La Ligue Française Division 2"}
+TARGET_LEAGUES = {"La Ligue Française", "La Ligue Française Division 2", "EMEA Masters"}
 
 
 # ─── strip_wiki_markup ────────────────────────────────────────────────────────

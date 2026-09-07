@@ -178,7 +178,7 @@ class TestTransformRows:
 
 
 class TestGetLflOverviewPages:
-    def test_returns_only_lfl_pages(self):
+    def test_returns_lfl_pages(self):
         tournaments = [
             {"OverviewPage": "LFL/2026/Spring", "League": "La Ligue Française"},
             {"OverviewPage": "LFL2/2026/Spring", "League": "La Ligue Française Division 2"},
@@ -187,10 +187,22 @@ class TestGetLflOverviewPages:
         result = get_lfl_overview_pages(tournaments)
         assert result == {"LFL/2026/Spring", "LFL2/2026/Spring"}
 
+    def test_includes_emea_masters(self):
+        tournaments = [
+            {"OverviewPage": "LFL/2026/Spring", "League": "La Ligue Française"},
+            {
+                "OverviewPage": "EMEA Masters/2026 Season/Spring Main Event",
+                "League": "EMEA Masters",
+            },
+            {"OverviewPage": "LCS/2026/Spring", "League": "LCS"},
+        ]
+        result = get_lfl_overview_pages(tournaments)
+        assert result == {"LFL/2026/Spring", "EMEA Masters/2026 Season/Spring Main Event"}
+
     def test_empty_tournaments_returns_empty_set(self):
         assert get_lfl_overview_pages([]) == set()
 
-    def test_no_lfl_leagues_returns_empty_set(self):
+    def test_no_target_leagues_returns_empty_set(self):
         tournaments = [{"OverviewPage": "LCS/2026", "League": "LCS"}]
         assert get_lfl_overview_pages(tournaments) == set()
 

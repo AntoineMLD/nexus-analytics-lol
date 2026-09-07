@@ -1,38 +1,53 @@
 -- Dimension : équipe actuelle de chaque joueur LFL.
+-- Granularité : une ligne par joueur (player_link).
 --
--- Granularité : une ligne par joueur (player_link unique).
--- Représente l'état courant — l'équipe dans laquelle le joueur a joué
--- en dernier (date de partie la plus récente dans nos données).
+-- Deux CTEs :
+--   1. all_teams — agrège toutes les équipes jouées par player_link (ARRAY_AGG en GROUP BY,
+--      supporté par BigQuery contrairement à ARRAY_AGG dans une window function).
+--   2. latest_team — détermine l'équipe la plus récente via QUALIFY + ROW_NUMBER.
 --
--- Rôle dans le schéma SCD :
---   Ce modèle est la SOURCE du snapshot snap_player_team.
---   À chaque dbt snapshot, si current_team a changé pour un player_id,
---   une nouvelle ligne est insérée dans le snapshot (SCD Type 2).
---   L'ancienne ligne reçoit dbt_valid_to = date du changement.
---
--- Choix QUALIFY + ROW_NUMBER : c'est l'idiome BigQuery pour garder
--- une seule ligne par player_link (la plus récente).
--- Équivalent à un sous-SELECT avec MAX(datetime_utc), mais plus lisible.
---
--- Choix ARRAY_AGG pour all_teams : collecte toutes les équipes distinctes
--- jouées par le joueur dans l'ordre chronologique, utile pour le jury
--- qui veut voir la mobilité inter-équipes.
+-- Jointure finale pour combiner équipe actuelle + historique complet.
+
+with all_teams as (
+
+    select
+        player_link,
+        array_agg(distinct team order by team)  as all_teams_played
+
+    from {{ ref('stg_lfl_player_stats') }}
+    where team is not null
+    group by player_link
+
+),
+
+latest_team as (
+
+    select
+        player_link,
+        player_name,
+        team                                    as current_team,
+        cast(max(datetime_utc) as date)         as last_game_date,
+        count(distinct game_id)                 as total_games_in_team
+
+    from {{ ref('stg_lfl_player_stats') }}
+    where team is not null
+    group by player_link, player_name, team
+
+    qualify
+        row_number() over (
+            partition by player_link
+            order by max(datetime_utc) desc
+        ) = 1
+
+)
 
 select
-    player_link                                         as player_id,
-    player_name,
-    team                                                as current_team,
-    cast(max(datetime_utc) as date)                     as last_game_date,
-    count(distinct game_id)                             as total_games_in_team,
-    array_agg(
-        distinct team
-        order by team
-    ) over (partition by player_link)                   as all_teams_played
+    l.player_link           as player_id,
+    l.player_name,
+    l.current_team,
+    l.last_game_date,
+    l.total_games_in_team,
+    t.all_teams_played
 
-from {{ ref('stg_lfl_player_stats') }}
-
-qualify
-    row_number() over (
-        partition by player_link
-        order by max(datetime_utc) over (partition by player_link, team) desc
-    ) = 1
+from latest_team l
+join all_teams t on l.player_link = t.player_link
