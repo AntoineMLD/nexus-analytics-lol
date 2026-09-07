@@ -63,7 +63,8 @@ metrics = [
     ("CS moyen", "avg_cs", lambda s: round(s["avg_cs"], 0), None),
 ]
 
-col_l, col_m, col_r = st.columns([2, 1, 2])
+col_l, col_gap_l, col_m, col_gap_r, col_r = st.columns([3, 0.5, 2, 0.5, 3])
+
 with col_m:
     st.markdown("<br>", unsafe_allow_html=True)
     for label, _, _, _ in metrics:
