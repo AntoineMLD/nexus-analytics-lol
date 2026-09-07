@@ -92,14 +92,23 @@ for label, _, fn, _ in metrics:
         "</tr>"
     )
 
+team_a = stats_a.get("current_team") or "—"
+team_b = stats_b.get("current_team") or "—"
+
 st.markdown(
     f"""
     <table style='width:100%; border-collapse:collapse;'>
       <thead>
         <tr>
-          <th style='text-align:left; color:#1f77b4; font-size:1.1em; padding:10px 20px'>{player_a}</th>
+          <th style='text-align:left; padding:10px 20px'>
+            <span style='color:#1f77b4; font-size:1.1em'>{player_a}</span><br>
+            <span style='font-size:0.85em; color:#888; font-weight:400'>{team_a}</span>
+          </th>
           <th></th>
-          <th style='text-align:right; color:#ff7f0e; font-size:1.1em; padding:10px 20px'>{player_b}</th>
+          <th style='text-align:right; padding:10px 20px'>
+            <span style='color:#ff7f0e; font-size:1.1em'>{player_b}</span><br>
+            <span style='font-size:0.85em; color:#888; font-weight:400'>{team_b}</span>
+          </th>
         </tr>
       </thead>
       <tbody>{rows_html}</tbody>

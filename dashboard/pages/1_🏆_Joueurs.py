@@ -74,10 +74,27 @@ st.plotly_chart(fig, width="stretch")
 
 st.markdown(f"### Classement complet ({len(df)} joueurs)")
 
+cols_display = [
+    c
+    for c in [
+        "player_name",
+        "current_team",
+        "total_games",
+        "win_rate_pct",
+        "kda",
+        "avg_kills",
+        "avg_deaths",
+        "avg_assists",
+        "avg_cs",
+    ]
+    if c in df.columns
+]
+
 st.dataframe(
-    df.rename(
+    df[cols_display].rename(
         columns={
             "player_name": "Joueur",
+            "current_team": "Équipe actuelle",
             "total_games": "Parties",
             "win_rate_pct": "Win% ",
             "kda": "KDA",

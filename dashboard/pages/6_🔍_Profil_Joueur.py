@@ -33,6 +33,23 @@ if not stats:
     st.warning(f"Aucune donnée agrégée pour {selected_player}.")
     st.stop()
 
+# ─── Équipe actuelle ─────────────────────────────────────────────────────────
+
+current_team = stats.get("current_team") or "—"
+all_teams = stats.get("all_teams_played")
+
+team_badge = (
+    f"<span style='background:#1f77b4; color:white; padding:4px 14px; "
+    f"border-radius:20px; font-weight:600; font-size:1em'>{current_team}</span>"
+)
+st.markdown(f"**Équipe actuelle :** {team_badge}", unsafe_allow_html=True)
+
+if all_teams and isinstance(all_teams, list) and len(all_teams) > 1:
+    teams_list = " · ".join(all_teams)
+    st.caption(f"Équipes jouées : {teams_list}")
+
+st.markdown("---")
+
 # ─── KPIs joueur ─────────────────────────────────────────────────────────────
 
 kda = round((stats["avg_kills"] + stats["avg_assists"]) / max(stats["avg_deaths"], 1), 2)

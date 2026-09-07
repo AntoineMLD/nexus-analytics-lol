@@ -46,12 +46,13 @@ def fetch_seasons() -> list[str]:
 
 @st.cache_data(ttl=600, show_spinner=False)
 def fetch_players(min_games: int = 5, season: str | None = None) -> pd.DataFrame:
-    """Joueurs LFL avec stats agrégées — filtrables par saison."""
+    """Joueurs LFL avec stats agrégées et équipe actuelle — filtrables par saison."""
     if season:
         sql = f"""
             SELECT
                 ps.player_link                                                          AS player_id,
                 ps.player_name,
+                t.current_team,
                 COUNT(DISTINCT ps.game_id)                                              AS total_games,
                 ROUND(COUNTIF(ps.player_win) * 100.0 / COUNT(*), 1)                    AS win_rate_pct,
                 ROUND(AVG(ps.kills), 2)                                                 AS avg_kills,
@@ -63,8 +64,10 @@ def fetch_players(min_games: int = 5, season: str | None = None) -> pd.DataFrame
             FROM {_table(DATASET_STAGING, "stg_lfl_player_stats")} ps
             JOIN {_table(DATASET_STAGING, "stg_lfl_matches")} m
               ON ps.game_id = m.game_id
+            LEFT JOIN {_table(DATASET_GOLD, "dim_player_current_team")} t
+              ON ps.player_link = t.player_id
             WHERE STARTS_WITH(m.overview_page, '{season}')
-            GROUP BY ps.player_link, ps.player_name
+            GROUP BY ps.player_link, ps.player_name, t.current_team
             HAVING COUNT(DISTINCT ps.game_id) >= {min_games}
             ORDER BY total_games DESC
             LIMIT 200
@@ -72,18 +75,21 @@ def fetch_players(min_games: int = 5, season: str | None = None) -> pd.DataFrame
     else:
         sql = f"""
             SELECT
-                player_id,
-                player_name,
-                total_games,
-                win_rate_pct,
-                avg_kills,
-                avg_deaths,
-                avg_assists,
-                avg_cs,
-                ROUND(SAFE_DIVIDE(avg_kills + avg_assists, GREATEST(avg_deaths, 1)), 2) AS kda
-            FROM {_table(DATASET_GOLD, "dim_player")}
-            WHERE total_games >= {min_games}
-            ORDER BY total_games DESC
+                p.player_id,
+                p.player_name,
+                t.current_team,
+                p.total_games,
+                p.win_rate_pct,
+                p.avg_kills,
+                p.avg_deaths,
+                p.avg_assists,
+                p.avg_cs,
+                ROUND(SAFE_DIVIDE(p.avg_kills + p.avg_assists, GREATEST(p.avg_deaths, 1)), 2) AS kda
+            FROM {_table(DATASET_GOLD, "dim_player")} p
+            LEFT JOIN {_table(DATASET_GOLD, "dim_player_current_team")} t
+              ON p.player_id = t.player_id
+            WHERE p.total_games >= {min_games}
+            ORDER BY p.total_games DESC
             LIMIT 200
         """
     return _client().query(sql).to_dataframe()
@@ -169,16 +175,38 @@ def fetch_player_names() -> list[str]:
 
 @st.cache_data(ttl=600, show_spinner=False)
 def fetch_player_stats_by_name(player_name: str) -> dict | None:
-    """Stats complètes d'un joueur par nom."""
+    """Stats complètes d'un joueur par nom, avec équipe actuelle et historique."""
     sql = f"""
-        SELECT *,
-            ROUND(SAFE_DIVIDE(avg_kills + avg_assists, GREATEST(avg_deaths, 1)), 2) AS kda
-        FROM {_table(DATASET_GOLD, "dim_player")}
-        WHERE player_name = '{player_name}'
+        SELECT
+            p.*,
+            ROUND(SAFE_DIVIDE(p.avg_kills + p.avg_assists, GREATEST(p.avg_deaths, 1)), 2) AS kda,
+            t.current_team,
+            t.last_game_date,
+            t.total_games_in_team,
+            t.all_teams_played
+        FROM {_table(DATASET_GOLD, "dim_player")} p
+        LEFT JOIN {_table(DATASET_GOLD, "dim_player_current_team")} t
+          ON p.player_id = t.player_id
+        WHERE p.player_name = '{player_name}'
         LIMIT 1
     """
     rows = _client().query(sql).to_dataframe()
     return rows.iloc[0].to_dict() if not rows.empty else None
+
+
+@st.cache_data(ttl=600, show_spinner=False)
+def fetch_player_current_team(player_name: str) -> str | None:
+    """Équipe actuelle d'un joueur (accès rapide)."""
+    sql = f"""
+        SELECT t.current_team
+        FROM {_table(DATASET_GOLD, "dim_player")} p
+        JOIN {_table(DATASET_GOLD, "dim_player_current_team")} t
+          ON p.player_id = t.player_id
+        WHERE p.player_name = '{player_name}'
+        LIMIT 1
+    """
+    rows = _client().query(sql).to_dataframe()
+    return rows.iloc[0]["current_team"] if not rows.empty else None
 
 
 @st.cache_data(ttl=600, show_spinner=False)
