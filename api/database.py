@@ -50,7 +50,7 @@ def query_players(
             avg_deaths,
             avg_assists,
             avg_cs
-        FROM {_table(DATASET_GOLD, 'dim_player')}
+        FROM {_table(DATASET_GOLD, "dim_player")}
         WHERE total_games >= @min_games
         ORDER BY total_games DESC
         LIMIT @limit
@@ -93,7 +93,7 @@ def query_champion_stats(
             picks_mid,
             picks_bot,
             picks_support
-        FROM {_table(DATASET_GOLD, 'dim_champion')}
+        FROM {_table(DATASET_GOLD, "dim_champion")}
         WHERE total_games_played >= @min_games
         ORDER BY total_games_played DESC
         LIMIT @limit
@@ -137,7 +137,7 @@ def query_team_draft_history(
             action_order,
             champion,
             team_won
-        FROM {_table(DATASET_GOLD, 'fact_draft')}
+        FROM {_table(DATASET_GOLD, "fact_draft")}
         WHERE team_name = @team
           AND (@patch IS NULL OR patch = @patch)
           AND (@action_type IS NULL OR action_type = @action_type)
@@ -181,7 +181,7 @@ def query_meta_trends(
             wins,
             pick_rate_pct,
             win_rate_pct
-        FROM {_table(DATASET_GOLD, 'fact_meta_trend')}
+        FROM {_table(DATASET_GOLD, "fact_meta_trend")}
         WHERE
             (@patch IS NULL OR patch = @patch)
             AND (@overview_page IS NULL OR overview_page = @overview_page)
@@ -208,7 +208,7 @@ def query_player_by_id(player_id: str) -> dict | None:
     """
     sql = f"""
         SELECT *
-        FROM {_table(DATASET_GOLD, 'dim_player')}
+        FROM {_table(DATASET_GOLD, "dim_player")}
         WHERE player_id = @player_id
         LIMIT 1
     """
@@ -247,7 +247,7 @@ def query_matches(
             gamelength_seconds,
             patch,
             n_game_in_match
-        FROM {_table(DATASET_STAGING, 'stg_lfl_matches')}
+        FROM {_table(DATASET_STAGING, "stg_lfl_matches")}
         WHERE
             (@team IS NULL OR team1 = @team OR team2 = @team)
             AND (@season IS NULL OR STARTS_WITH(overview_page, @season))

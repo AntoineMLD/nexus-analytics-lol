@@ -360,9 +360,7 @@ def print_oracle_crosscheck(
         if oe_total == 0 and lp_total == 0:
             status = "—"
 
-        print(
-            f"{year:<6} {oe_d1:>7} {oe_d2:>7} {oe_total:>9} {lp_total:>9} " f"{diff:>+6}  {status}"
-        )
+        print(f"{year:<6} {oe_d1:>7} {oe_d2:>7} {oe_total:>9} {lp_total:>9} {diff:>+6}  {status}")
 
     print_separator("-", 60)
     print(
