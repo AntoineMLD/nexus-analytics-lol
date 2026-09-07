@@ -8,7 +8,7 @@ Projet réalisé dans le cadre de la certification **Ingénieur Data RNCP niveau
 
 ## Objectif
 
-Ingérer, transformer et exposer les données de matchs LoL esports (Oracle's Elixir, Leaguepedia, Riot API) dans une architecture **Medallion** (Bronze / Silver / Gold) hébergée sur Google Cloud Platform.
+Ingérer, transformer et exposer les données de matchs LoL esports (Oracle's Elixir, Leaguepedia, Riot API) dans une architecture **Medallion** (Bronze / Silver / Gold) hébergée sur Google Cloud Platform, pour alimenter un **dashboard Streamlit** et une **API FastAPI** couvrant la LFL (D1 + D2) et l'EMEA Masters.
 
 ---
 
@@ -30,8 +30,9 @@ GCS Bronze   ──►   GCS Silver   ──►   BigQuery Gold   ──►   AP
 | Couche | Rôle | Technologie | Statut |
 |--------|------|-------------|--------|
 | Bronze | Données brutes, sans transformation | Google Cloud Storage (NDJSON) | ✅ Implémenté |
-| Silver | Nettoyage, typage, filtrage LFL | Python → Google Cloud Storage | ✅ Implémenté |
-| Gold | Agrégats métier, modèles dimensionnels | BigQuery + dbt | ✅ Opérationnel |
+| Silver | Nettoyage, typage, filtrage LFL + EMEA Masters | Python → Google Cloud Storage | ✅ Implémenté |
+| Gold | Agrégats métier, 11 modèles dimensionnels | BigQuery + dbt | ✅ Opérationnel |
+| Dashboard | Visualisation interactive — 8 pages métier | Streamlit | ✅ Opérationnel |
 | API | Exposition des données Gold | FastAPI | ✅ Opérationnel |
 
 ---
@@ -41,18 +42,25 @@ GCS Bronze   ──►   GCS Silver   ──►   BigQuery Gold   ──►   AP
 ```
 ingestion/
   oracle_elixir/        # CSV historiques depuis Google Drive
-  leaguepedia/          # API Cargo Leaguepedia (tournois, matchs, joueurs)
+  leaguepedia/          # API Cargo Leaguepedia (LFL + EMEA Masters)
   riot_api/             # PUUIDs et ranked match IDs via Riot API
   utils.py              # GCS client, Discord notifications, Settings (pydantic)
 
 pipeline/
   silver_transforms/    # Transforms Bronze → Silver (Python, CLI argparse)
-    lfl_matches.py      # ScoreboardGames → silver/leaguepedia/lfl_matches/
-    lfl_player_stats.py # ScoreboardPlayers → silver/leaguepedia/lfl_player_stats/
-    lfl_players.py      # Players + TournamentRosters → silver/leaguepedia/lfl_players/
+    lfl_matches.py      # ScoreboardGames → lfl_matches (LFL + EMEA)
+    lfl_player_stats.py # ScoreboardPlayers → lfl_player_stats (LFL + EMEA)
+    lfl_drafts.py       # PicksAndBansS7 → lfl_drafts (long format, LFL + EMEA)
+    lfl_players.py      # Players + TournamentRosters → lfl_players
   loaders/
-    bq_loader.py        # GCS Silver → BigQuery raw (CLI, WRITE_TRUNCATE)
-  orchestration/        # Orchestration des pipelines (planifié)
+    bq_loader.py        # ⚠️ GCS Silver → BigQuery raw (WRITE_TRUNCATE) — obligatoire avant dbt
+  orchestration/        # Orchestration complète du pipeline
+
+dashboard/
+  app.py                # Page d'accueil Streamlit (KPIs globaux)
+  queries.py            # Toutes les requêtes BigQuery du dashboard
+  utils.py              # Fonctions utilitaires partagées
+  pages/                # 7 pages métier (Joueurs, Champions, Drafts, Meta, Equipes, Profil, Alerte, EMEA)
 
 dbt/
   dbt_project.yml       # Config dbt (staging=view, gold=table)
@@ -264,22 +272,28 @@ uv run python -m pipeline.silver_transforms.lfl_players --date 2026-06-04
 ## Charger en Gold (BigQuery + dbt)
 
 ```bash
-# 1. Charger une table Silver dans BigQuery (dataset raw)
+# ⚠️ bq_loader est obligatoire avant dbt — il charge GCS Silver dans BigQuery raw
 uv run python -m pipeline.loaders.bq_loader \
-  --source leaguepedia --table lfl_matches --date 2026-06-07
+  --source leaguepedia --table lfl_matches --date 2026-09-07
 
 uv run python -m pipeline.loaders.bq_loader \
-  --source leaguepedia --table lfl_player_stats --date 2026-07-06
+  --source leaguepedia --table lfl_player_stats --date 2026-09-07
 
 uv run python -m pipeline.loaders.bq_loader \
-  --source leaguepedia --table lfl_players --date 2026-06-04
+  --source leaguepedia --table lfl_drafts --date 2026-09-07
 
-# 2. Copier dbt/profiles.yml dans ~/.dbt/profiles.yml et renseigner GCP_PROJECT_ID
-# 3. Depuis le dossier dbt/
-cd dbt
-dbt run        # Exécuter les modèles staging → dimensions → facts
-dbt test       # Lancer les tests not_null, unique, relationships
-dbt docs serve # Générer et ouvrir la documentation
+# dbt rebuild Gold (11 modèles)
+uv run --with dbt-bigquery dbt run --project-dir dbt --profiles-dir dbt
+uv run --with dbt-bigquery dbt test --project-dir dbt --profiles-dir dbt
+```
+
+---
+
+## Lancer le dashboard
+
+```bash
+uv run streamlit run dashboard/app.py --server.port 8501 --server.headless true
+# http://localhost:8501
 ```
 
 ---
@@ -338,10 +352,11 @@ Les tests unitaires tournent **sans credentials ni accès réseau** — tous les
 | Gestion des dépendances | uv |
 | Stockage (Bronze + Silver) | Google Cloud Storage |
 | Entrepôt de données (Gold) | BigQuery |
-| Transformations (Gold) | dbt (5 modèles : staging, dim, facts) |
+| Transformations (Gold) | dbt (11 modèles : staging, dim, facts) |
+| Dashboard | Streamlit (8 pages) + Plotly Express |
 | API | FastAPI (3 endpoints, auth X-API-Key, OpenAPI `/docs`) |
 | Infrastructure as Code | Terraform (bucket GCS, datasets BQ, IAM, lifecycle) |
 | Config / secrets | pydantic-settings + .env |
 | Linting | Ruff |
-| Tests | pytest + unittest.mock |
+| Tests | pytest + unittest.mock (263 tests) |
 | Notifications | Discord Webhooks |
