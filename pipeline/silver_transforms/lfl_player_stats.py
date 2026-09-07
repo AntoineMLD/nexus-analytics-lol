@@ -1,7 +1,7 @@
-"""Silver transform: normalize LFL player-level game stats from ScoreboardPlayers.
+"""Silver transform: normalize LFL and EMEA Masters player-level game stats from ScoreboardPlayers.
 
 Reads:
-  - bronze/leaguepedia/Tournaments/{date}.json   (to identify LFL OverviewPages)
+  - bronze/leaguepedia/Tournaments/{date}.json   (to identify target OverviewPages)
   - bronze/leaguepedia/ScoreboardPlayers/{date}.json
 
 Writes:
@@ -25,7 +25,11 @@ from datetime import UTC, datetime
 
 from ingestion.utils import gcs_client, logger, send_discord_notification, settings
 
-LFL_LEAGUES = {"La Ligue Française", "La Ligue Française Division 2"}
+TARGET_LEAGUES = {
+    "La Ligue Française",
+    "La Ligue Française Division 2",
+    "EMEA Masters",
+}
 
 
 def to_snake_case(name: str) -> str:
@@ -59,28 +63,27 @@ def load_bronze_table(bucket_name: str, table_name: str, date: str) -> list[dict
 
 
 def get_lfl_overview_pages(tournaments: list[dict]) -> set[str]:
-    """Return OverviewPage values for all LFL (D1 + D2) tournaments."""
-    lfl_pages = {row["OverviewPage"] for row in tournaments if row.get("League") in LFL_LEAGUES}
-    logger.info("Found %d LFL tournament overview pages.", len(lfl_pages))
+    """Return OverviewPage values for all LFL (D1 + D2) and EMEA Masters tournaments."""
+    lfl_pages = {row["OverviewPage"] for row in tournaments if row.get("League") in TARGET_LEAGUES}
+    logger.info("Found %d target tournament overview pages.", len(lfl_pages))
     return lfl_pages
 
 
 def filter_lfl_rows(rows: list[dict], lfl_pages: set[str]) -> list[dict]:
-    """Keep only rows whose OverviewPage belongs to an LFL tournament.
+    """Keep only rows whose OverviewPage belongs to a target tournament (LFL or EMEA Masters).
 
     Raises ValueError if the input is non-empty but the filter returns 0 rows.
     This guards against corrupted Bronze files (e.g. a global unfiltered ingestion
-    that has no LFL data), preventing a silent empty Silver write.
+    that has no target data), preventing a silent empty Silver write.
     """
     filtered = [row for row in rows if row.get("OverviewPage") in lfl_pages]
-    logger.info("Filtered %d → %d LFL player-game rows.", len(rows), len(filtered))
+    logger.info("Filtered %d → %d target league player-game rows.", len(rows), len(filtered))
 
     if rows and not filtered:
-        # Show a sample of OverviewPage values to help diagnose the root cause
         sample_pages = list({r.get("OverviewPage") for r in rows[:20] if r.get("OverviewPage")})[:5]
         raise ValueError(
-            f"Bronze ScoreboardPlayers has {len(rows)} rows but 0 match LFL OverviewPages. "
-            f"This file was likely ingested without the 'WHERE OverviewPage LIKE LFL/%' filter. "
+            f"Bronze ScoreboardPlayers has {len(rows)} rows but 0 match target OverviewPages. "
+            f"This file was likely ingested without a league filter. "
             f"Sample OverviewPage values found: {sample_pages}. "
             f"Re-ingest ScoreboardPlayers with: "
             f"uv run python -m ingestion.leaguepedia.ingest --table ScoreboardPlayers"
@@ -212,7 +215,7 @@ def run_transform(date: str, tournaments_date: str | None = None) -> None:
 
     if not lfl_pages:
         msg = (
-            f"No LFL tournaments found in Tournaments Bronze "
+            f"No target tournaments (LFL / EMEA Masters) found in Tournaments Bronze "
             f"({effective_tournaments_date}) — aborting."
         )
         logger.error(msg)

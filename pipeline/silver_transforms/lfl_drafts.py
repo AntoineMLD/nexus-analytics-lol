@@ -1,4 +1,4 @@
-"""Silver transform: normalize LFL draft data from PicksAndBansS7.
+"""Silver transform: normalize LFL and EMEA Masters draft data from PicksAndBansS7.
 
 Reads:
   - bronze/leaguepedia/Tournaments/{date}.json   (to identify LFL OverviewPages)
@@ -31,7 +31,11 @@ from datetime import UTC, datetime
 
 from ingestion.utils import gcs_client, logger, send_discord_notification, settings
 
-LFL_LEAGUES = {"La Ligue Française", "La Ligue Française Division 2"}
+TARGET_LEAGUES = {
+    "La Ligue Française",
+    "La Ligue Française Division 2",
+    "EMEA Masters",
+}
 
 # Ordre des colonnes Bronze pour le dépliage (action_type, action_order, team_side)
 _DRAFT_COLUMNS: list[tuple[str, str, int]] = [
@@ -71,9 +75,9 @@ def load_bronze_table(bucket_name: str, table_name: str, date: str) -> list[dict
 
 
 def get_lfl_overview_pages(tournaments: list[dict]) -> set[str]:
-    """Return OverviewPage values for all LFL (D1 + D2) tournaments."""
-    lfl_pages = {row["OverviewPage"] for row in tournaments if row.get("League") in LFL_LEAGUES}
-    logger.info("Found %d LFL tournament overview pages.", len(lfl_pages))
+    """Return OverviewPage values for all LFL (D1 + D2) and EMEA Masters tournaments."""
+    lfl_pages = {row["OverviewPage"] for row in tournaments if row.get("League") in TARGET_LEAGUES}
+    logger.info("Found %d target tournament overview pages.", len(lfl_pages))
     return lfl_pages
 
 

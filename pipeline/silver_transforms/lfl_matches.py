@@ -1,15 +1,15 @@
-"""Silver transform: normalize LFL match-level data from ScoreboardGames.
+"""Silver transform: normalize LFL and EMEA Masters match-level data from ScoreboardGames.
 
 Reads:
-  - bronze/leaguepedia/Tournaments/{date}.json   (to identify LFL OverviewPages)
+  - bronze/leaguepedia/Tournaments/{date}.json   (to identify target OverviewPages)
   - bronze/leaguepedia/ScoreboardGames/{date}.json
 
 Writes:
   - silver/leaguepedia/lfl_matches/{date}.json  (NDJSON, one game per line)
 
 The Bronze ScoreboardGames file contains global data (all leagues). This transform
-filters to LFL (D1 + D2) games only using the Tournaments Bronze table, then
-normalizes all fields.
+filters to LFL (D1 + D2) and EMEA Masters games using the Tournaments Bronze table,
+then normalizes all fields.
 
 Each output row contains cleaned, typed fields:
   - datetime_utc parsed to ISO 8601 string
@@ -29,7 +29,11 @@ from datetime import UTC, datetime
 
 from ingestion.utils import gcs_client, logger, send_discord_notification, settings
 
-LFL_LEAGUES = {"La Ligue Française", "La Ligue Française Division 2"}
+TARGET_LEAGUES = {
+    "La Ligue Française",
+    "La Ligue Française Division 2",
+    "EMEA Masters",
+}
 
 
 def to_snake_case(name: str) -> str:
@@ -89,20 +93,20 @@ def load_bronze_table(bucket_name: str, table_name: str, date: str) -> list[dict
 
 
 def get_lfl_overview_pages(tournaments: list[dict]) -> set[str]:
-    """Return OverviewPage values for all LFL (D1 + D2) tournaments.
+    """Return OverviewPage values for all LFL (D1 + D2) and EMEA Masters tournaments.
 
     Bronze ScoreboardGames contains global data. This set is used to filter
-    down to LFL games only in the Silver layer.
+    down to target league games only in the Silver layer.
     """
-    lfl_pages = {row["OverviewPage"] for row in tournaments if row.get("League") in LFL_LEAGUES}
-    logger.info("Found %d LFL tournament overview pages.", len(lfl_pages))
+    lfl_pages = {row["OverviewPage"] for row in tournaments if row.get("League") in TARGET_LEAGUES}
+    logger.info("Found %d target tournament overview pages.", len(lfl_pages))
     return lfl_pages
 
 
 def filter_lfl_games(rows: list[dict], lfl_pages: set[str]) -> list[dict]:
-    """Keep only games whose OverviewPage belongs to an LFL tournament."""
+    """Keep only games whose OverviewPage belongs to a target tournament (LFL or EMEA Masters)."""
     filtered = [row for row in rows if row.get("OverviewPage") in lfl_pages]
-    logger.info("Filtered %d → %d LFL games.", len(rows), len(filtered))
+    logger.info("Filtered %d → %d target league games.", len(rows), len(filtered))
     return filtered
 
 
@@ -240,7 +244,7 @@ def run_transform(date: str, tournaments_date: str | None = None) -> None:
 
     if not lfl_pages:
         msg = (
-            f"No LFL tournaments found in Tournaments Bronze "
+            f"No target tournaments (LFL / EMEA Masters) found in Tournaments Bronze "
             f"({effective_tournaments_date}) — aborting."
         )
         logger.error(msg)
