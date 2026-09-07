@@ -60,12 +60,38 @@ Livrable : rapport professionnel individuel
 
 ### Critères d'évaluation
 
-- [ ] La modélisation des variations intègre pleinement les changements dans les données sources.
-- [ ] La modélisation des variations permet d'historiser les changements dans les données sources.
-- [ ] Les variations sont intégrées à l'entrepôt de données.
-- [ ] L'intégration des variations respecte la modélisation initiale.
-- [ ] Les ETL sont mis à jour en fonction des besoins liés aux variations.
-- [ ] La documentation est à jour, avec les variations.
+- [x] La modélisation des variations intègre pleinement les changements dans les données sources.
+- [x] La modélisation des variations permet d'historiser les changements dans les données sources.
+- [x] Les variations sont intégrées à l'entrepôt de données.
+- [x] L'intégration des variations respecte la modélisation initiale.
+- [x] Les ETL sont mis à jour en fonction des besoins liés aux variations.
+- [x] La documentation est à jour, avec les variations.
 
-> **Note** : le projet applique implicitement SCD Type 1 (WRITE_TRUNCATE sur bq_loader — écrasement sans historisation). Aucun SCD Type 2 ni Type 3 n'est implémenté. Le choix SCD1 est justifié dans `docs/MERISE_MCD_MPD.md` (section 4 "Pourquoi SCD Type 1") mais aucune variation dimensionnelle n'est formellement modélisée ni intégrée.
-> À documenter et défendre à l'oral : "SCD Type 1 choisi car les statistiques agrégées remplacent systématiquement les précédentes ; l'historique joueur par partie est préservé dans `fact_player_game` via la colonne `team`."
+> **Implémentation SCD Type 2 — historisation des changements d'équipe joueur** :
+>
+> **Modèle source** : `dbt/models/dimensions/dim_player_current_team.sql`
+> - Une ligne par joueur LFL (player_id unique).
+> - Expose : `current_team`, `last_game_date`, `total_games_in_team`, `all_teams_played`.
+> - Calcule l'équipe la plus récente via `ROW_NUMBER() OVER (PARTITION BY player_link ORDER BY MAX(datetime_utc) DESC)`.
+>
+> **Snapshot SCD2** : `dbt/snapshots/snap_player_team.sql`
+> - Stratégie `check` sur `current_team` : détecte chaque changement d'équipe.
+> - À chaque `dbt snapshot`, si un joueur change d'équipe :
+>   - L'ancienne ligne reçoit `dbt_valid_to = NOW()` (fermée).
+>   - Une nouvelle ligne est insérée avec `dbt_valid_to = NULL` (active).
+> - Colonnes dbt ajoutées : `dbt_scd_id`, `dbt_updated_at`, `dbt_valid_from`, `dbt_valid_to`.
+>
+> **Cas d'usage** : "Dans quelle équipe jouait Caliste au 1er mars 2025 ?"
+> ```sql
+> SELECT player_name, current_team, dbt_valid_from, dbt_valid_to
+> FROM gold_gold.snap_player_team
+> WHERE player_id = 'Player:Caliste'
+>   AND dbt_valid_from <= '2025-03-01'
+>   AND (dbt_valid_to > '2025-03-01' OR dbt_valid_to IS NULL)
+> ```
+>
+> **Cohérence avec le schéma** : SCD1 conservé pour les dimensions agrégées (`dim_player`, `dim_champion`) — les stats de carrière s'écrasent à chaque run. SCD2 appliqué uniquement sur la dimension qui varie de manière significative (affiliation équipe), conformément à la règle "appliquer la méthode adaptée en fonction du type de changement".
+>
+> **Fréquence recommandée** : `dbt snapshot` hebdomadaire, après `dbt run`.
+>
+> **Fichiers** : `dbt/snapshots/snap_player_team.sql`, `dbt/models/dimensions/dim_player_current_team.sql`, `dbt/models/dimensions/schema.yml`, `dbt/dbt_project.yml`.

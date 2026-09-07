@@ -6,6 +6,7 @@ config-version: 2
 profile: nexus_analytics
 
 model-paths: ["models"]
+snapshot-paths: ["snapshots"]
 test-paths: ["tests"]
 seed-paths: ["seeds"]
 macro-paths: ["macros"]
@@ -30,3 +31,7 @@ models:
     facts:
       +materialized: table
       +schema: gold
+
+snapshots:
+  nexus_analytics:
+    +target_schema: gold
