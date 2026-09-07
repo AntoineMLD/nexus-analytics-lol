@@ -39,12 +39,26 @@ with career_stats as (
         )                                               as win_rate_pct
     from {{ ref('stg_lfl_player_stats') }}
     group by player_link, player_name
+),
+
+-- PUUID depuis Riot API — source optionnelle.
+-- Si raw.riot_api n'existe pas encore (ingestion non lancée), on utilise
+-- une CTE vide pour éviter de bloquer dim_player.
+-- Une fois le pipeline Riot exécuté, le JOIN enrichira la colonne puuid.
+{% set riot_relation = adapter.get_relation(
+    database=target.database,
+    schema='raw',
+    identifier='riot_api'
+) %}
+riot_players as (
+    {% if riot_relation %}
+        select player_name, puuid from {{ ref('stg_riot_players') }}
+    {% else %}
+        select cast(null as string) as player_name, cast(null as string) as puuid
+        where false
+    {% endif %}
 )
 
--- Jointure LEFT sur Riot API pour enrichir dim_player avec le PUUID.
--- La jointure est sur player_name car stg_riot_players utilise le pseudo
--- (ex: "Caliste") et non le player_link wiki (ex: "Player:Caliste").
--- LEFT JOIN : un joueur sans PUUID garde NULL — non bloquant.
 select
     cs.player_link                                  as player_id,
     cs.player_name,
@@ -58,11 +72,11 @@ select
     cs.avg_vision_score,
     cs.total_wins,
     cs.win_rate_pct,
-    -- PUUID depuis l'API Riot Games (NULL si le joueur n'a pas de compte EUW résolu)
+    -- PUUID Riot Games — NULL tant que raw.riot_api n'est pas chargé
     rp.puuid
 
 from career_stats cs
-left join {{ ref('stg_riot_players') }} rp
+left join riot_players rp
     on cs.player_name = rp.player_name
 
 order by cs.total_games desc
