@@ -288,6 +288,58 @@ def fetch_team_draft(team: str, action_type: str | None = None) -> pd.DataFrame:
 
 
 @st.cache_data(ttl=600, show_spinner=False)
+def fetch_team_compositions(team: str, limit: int = 10) -> pd.DataFrame:
+    """Reconstruit les compositions complètes d'une équipe (5 picks par match).
+
+    Répond à la question : "Quelles sont les 5 dernières compositions jouées par
+    notre prochain adversaire ?"
+    Chaque ligne = un match, avec les 5 picks dans l'ordre de draft.
+    """
+    sql = f"""
+        SELECT
+            game_id,
+            MAX(datetime_utc)                               AS datetime_utc,
+            MAX(patch)                                      AS patch,
+            team_side,
+            LOGICAL_OR(team_won)                            AS team_won,
+            MAX(CASE WHEN action_order = 1 THEN champion END) AS pick_1,
+            MAX(CASE WHEN action_order = 2 THEN champion END) AS pick_2,
+            MAX(CASE WHEN action_order = 3 THEN champion END) AS pick_3,
+            MAX(CASE WHEN action_order = 4 THEN champion END) AS pick_4,
+            MAX(CASE WHEN action_order = 5 THEN champion END) AS pick_5
+        FROM {_table(DATASET_GOLD, "fact_draft")}
+        WHERE team_name = '{team}'
+          AND action_type = 'pick'
+        GROUP BY game_id, team_side
+        ORDER BY MAX(datetime_utc) DESC
+        LIMIT {limit}
+    """
+    return _client().query(sql).to_dataframe()
+
+
+@st.cache_data(ttl=600, show_spinner=False)
+def fetch_team_pick_order(team: str) -> pd.DataFrame:
+    """Fréquence de pick par champion et par position (1-5) pour une équipe.
+
+    Répond à : "Quels champions pick-t-il le plus souvent et dans quel ordre ?"
+    """
+    sql = f"""
+        SELECT
+            champion,
+            action_order                                            AS pick_position,
+            COUNT(*)                                                AS freq,
+            ROUND(COUNTIF(team_won) * 100.0 / COUNT(*), 1)         AS win_rate_pct
+        FROM {_table(DATASET_GOLD, "fact_draft")}
+        WHERE team_name = '{team}'
+          AND action_type = 'pick'
+        GROUP BY champion, action_order
+        ORDER BY freq DESC
+        LIMIT 80
+    """
+    return _client().query(sql).to_dataframe()
+
+
+@st.cache_data(ttl=600, show_spinner=False)
 def fetch_meta_alerts(min_picks: int = 5) -> pd.DataFrame:
     """Champions avec winrate anormal sur les 2 derniers patches.
 
