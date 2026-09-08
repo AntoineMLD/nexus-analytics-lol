@@ -16,8 +16,8 @@ sources:
         description: "Actions de draft LFL (picks et bans) dépivotées depuis PicksAndBansS7."
       - name: oracle_elixir
         description: "Stats avancées joueur LFL depuis Oracle's Elixir CSV (golddiffat15, cspm, dpm)."
-      - name: riot_api
-        description: "PUUIDs des joueurs LFL depuis l'API Riot Games."
+      - name: riot_players
+        description: "PUUIDs des joueurs LFL depuis l'API Riot Games (silver/riot_api/riot_players/)."
 
 models:
   - name: stg_lfl_matches

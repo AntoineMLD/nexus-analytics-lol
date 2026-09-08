@@ -1,6 +1,6 @@
 -- Staging Riot API : association joueur LFL → PUUID.
 --
--- Source : raw.riot_api, chargé depuis silver/riot_api/{date}.ndjson
+-- Source : raw.riot_players, chargé depuis silver/riot_api/riot_players/{date}.json
 -- par pipeline/loaders/bq_loader.py.
 --
 -- Un PUUID par joueur (78 caractères). Seuls les joueurs avec un PUUID
@@ -13,6 +13,6 @@ select
     safe_cast(player_name as string) as player_name,
     safe_cast(puuid       as string) as puuid
 
-from {{ source('raw', 'riot_api') }}
+from {{ source('raw', 'riot_players') }}
 where player_name is not null
   and puuid is not null

@@ -258,18 +258,24 @@ def save_to_gcs(players: list[dict], bucket_name: str, date: str) -> None:
     send_discord_notification(msg)
 
 
-def run_transform(date: str, players_date: str | None = None) -> None:
+def run_transform(
+    date: str,
+    players_date: str | None = None,
+    rosters_date: str | None = None,
+) -> None:
     """Orchestrate the LFL players Silver transform for a given date.
 
     Args:
-        date: Ingestion date for Tournaments and TournamentRosters (format: YYYY-MM-DD).
-        players_date: Ingestion date for the Players table (defaults to date).
+        date: Ingestion date for Tournaments (format: YYYY-MM-DD).
+        players_date: Ingestion date for Players table (defaults to date).
+        rosters_date: Ingestion date for TournamentRosters (defaults to date).
     """
     bucket = settings.gcs_bucket_name
     effective_players_date = players_date or date
+    effective_rosters_date = rosters_date or date
 
     tournaments = load_bronze_table(bucket, "Tournaments", date)
-    rosters = load_bronze_table(bucket, "TournamentRosters", date)
+    rosters = load_bronze_table(bucket, "TournamentRosters", effective_rosters_date)
     players_bronze = load_bronze_table(bucket, "Players", effective_players_date)
 
     lfl_pages = filter_lfl_tournaments(tournaments)
@@ -303,9 +309,18 @@ def parse_args() -> argparse.Namespace:
         default=None,
         help="Ingestion date for Players table (default: same as --date).",
     )
+    parser.add_argument(
+        "--rosters-date",
+        default=None,
+        help="Ingestion date for TournamentRosters (default: same as --date).",
+    )
     return parser.parse_args()
 
 
 if __name__ == "__main__":
     args = parse_args()
-    run_transform(date=args.date, players_date=args.players_date)
+    run_transform(
+        date=args.date,
+        players_date=args.players_date,
+        rosters_date=args.rosters_date,
+    )

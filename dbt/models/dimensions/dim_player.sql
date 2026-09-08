@@ -1,3 +1,4 @@
+-- depends_on: {{ ref('stg_riot_players') }}
 -- Dimension joueurs : un joueur unique par player_link (identifiant wiki Leaguepedia).
 -- Agrège toutes les performances LFL d'un joueur en statistiques de carrière.
 --
@@ -42,20 +43,21 @@ with career_stats as (
 ),
 
 -- PUUID depuis Riot API — source optionnelle.
--- Si raw.riot_api n'existe pas encore (ingestion non lancée), on utilise
+-- Si raw.riot_players n'existe pas encore (ingestion non lancée), on utilise
 -- une CTE vide pour éviter de bloquer dim_player.
 -- Une fois le pipeline Riot exécuté, le JOIN enrichira la colonne puuid.
 {% set riot_relation = adapter.get_relation(
     database=target.database,
     schema='raw',
-    identifier='riot_api'
+    identifier='riot_players'
 ) %}
 riot_players as (
     {% if riot_relation %}
         select player_name, puuid from {{ ref('stg_riot_players') }}
     {% else %}
+        -- raw.riot_api absent : CTE vide compatible BigQuery (FROM obligatoire)
         select cast(null as string) as player_name, cast(null as string) as puuid
-        where false
+        from (select 1 as dummy) where 1 = 0
     {% endif %}
 )
 
@@ -72,7 +74,7 @@ select
     cs.avg_vision_score,
     cs.total_wins,
     cs.win_rate_pct,
-    -- PUUID Riot Games — NULL tant que raw.riot_api n'est pas chargé
+    -- PUUID Riot Games — NULL tant que raw.riot_players n'est pas chargé
     rp.puuid
 
 from career_stats cs
